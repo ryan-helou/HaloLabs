@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Auth (Auth.js / @auth/prisma-adapter standard models) ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  stripeCustomerId String? @unique
+  credits          Int     @default(0)
+
+  accounts Account[]
+  sessions Session[]
+  people   Person[]
+  jobs     AnalysisJob[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------- LookLab domain ----------
+
+model Person {
+  id          String   @id @default(cuid())
+  userId      String
+  displayName String
+  // Quiz answers / preferences ("builtFor" in the v2 results format)
+  builtFor    Json?
+  createdAt   DateTime @default(now())
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos  Photo[]
+  jobs    AnalysisJob[]
+  results AnalysisResult[]
+
+  @@index([userId])
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  personId     String
+  // Object key in the R2 bucket; photos are never stored on the app server
+  r2Key        String   @unique
+  originalName String?
+  contentType  String?
+  sizeBytes    Int?
+  uploadedAt   DateTime @default(now())
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model AnalysisJob {
+  id       String    @id @default(cuid())
+  userId   String
+  personId String
+  status   JobStatus @default(QUEUED)
+  error    String?
+
+  // Unit economics: track what each analysis actually costs
+  inputTokens  Int?
+  outputTokens Int?
+  costCents    Int?
+
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person Person          @relation(fields: [personId], references: [id], onDelete: Cascade)
+  result AnalysisResult?
+
+  @@index([status, createdAt])
+  @@index([personId])
+}
+
+model AnalysisResult {
+  id       String @id @default(cuid())
+  jobId    String @unique
+  personId String
+  // Schema version of the payload (current format: 2, matching results.json)
+  version  Int
+  // Full observations + plan payload, same shape the viewer already renders
+  data     Json
+
+  createdAt DateTime @default(now())
+
+  job    AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  person Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([personId])
+}
