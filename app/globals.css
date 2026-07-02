@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  @apply bg-paper text-ink antialiased;
+  /* The landing hero breaks out of the centered column with w-screen; clip the
+     scrollbar-width overhang so it never causes horizontal scroll. */
+  overflow-x: clip;
+}
+
+/* Corner label on image panels (qoves-style). */
+.panel-label {
+  @apply absolute z-10 font-mono text-[10px] uppercase tracking-label text-ink/70;
+}
+
+/* Photos may carry EXIF orientation; honor it. */
+img {
+  image-orientation: from-image;
+}
+
+/* Small uppercase mono label used for eyebrows and data captions. */
+.eyebrow {
+  @apply font-mono uppercase tracking-label text-[11px] text-ink-soft;
+}
+
+/* One restrained page-load move: hero fades up. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Briefly highlight a suggestion when you jump to it from the map/shortlist. */
+@keyframes target-flash {
+  0% {
+    background-color: #dcebe4;
+    border-color: #1c5d4c;
+  }
+  100% {
+    background-color: #ffffff;
+    border-color: #e7e6df;
+  }
+}
+
+.suggestion:target {
+  animation: target-flash 1.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  .rise {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

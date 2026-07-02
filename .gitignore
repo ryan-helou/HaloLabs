@@ -1,0 +1,17 @@
+/node_modules
+/.next
+/out
+*.tsbuildinfo
+next-env.d.ts.bak
+.DS_Store
+npm-debug.log*
+
+# env — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Local analysis data contains real personal photos and face-analysis
+# results — keep all of it out of the repo.
+/data/*
+!/data/.gitkeep
