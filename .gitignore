@@ -15,3 +15,6 @@ npm-debug.log*
 # results — keep all of it out of the repo.
 /data/*
 !/data/.gitkeep
+
+# prisma generated client (rebuilt via prisma generate)
+/lib/generated/
