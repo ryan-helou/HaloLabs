@@ -39,7 +39,7 @@ export default function SuggestionRow({
   return (
     <article
       id={anchorId}
-      className="suggestion relative scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-surface shadow-card transition-colors"
+      className="suggestion relative scroll-mt-24 overflow-hidden border border-line bg-surface transition-colors"
     >
       <span className={`absolute inset-y-0 left-0 w-1.5 ${rail}`} aria-hidden />
 
@@ -118,7 +118,9 @@ export default function SuggestionRow({
                   <ol className="mt-2 space-y-1.5">
                     {suggestion.how.map((step, i) => (
                       <li key={i} className="flex items-baseline gap-2.5 text-sm text-ink">
-                        <span className="font-mono text-xs text-pine">{i + 1}</span>
+                        <span className="w-7 shrink-0 font-mono text-xs text-pine">
+                          [{i + 1}]
+                        </span>
                         <span className="leading-relaxed">{step}</span>
                       </li>
                     ))}

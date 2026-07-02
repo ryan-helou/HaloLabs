@@ -7,7 +7,7 @@ import SignedInAs from "@/components/SignedInAs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Profiles · LookLab",
+  title: "Profiles · HaloLabs",
 };
 
 export default async function ProfilesPage() {

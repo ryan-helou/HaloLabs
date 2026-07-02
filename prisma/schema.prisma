@@ -62,7 +62,7 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ---------- LookLab domain ----------
+// ---------- HaloLabs domain ----------
 
 model Person {
   id          String   @id @default(cuid())

@@ -8,7 +8,7 @@ export default function SignedInAs() {
 
   useEffect(() => {
     try {
-      setName(window.localStorage.getItem("looklab_user"));
+      setName(window.localStorage.getItem("halolabs_user"));
     } catch {
       /* ignore */
     }

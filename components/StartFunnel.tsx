@@ -10,12 +10,12 @@ import { useRouter } from "next/navigation";
  * page laid out like a checkout — except everything costs $0 and the add-ons
  * are included. Only after joining does the questionnaire (/start/quiz) run.
  *
- * Entry answers are stashed in localStorage under `looklab_entry`; the wizard
+ * Entry answers are stashed in localStorage under `halolabs_entry`; the wizard
  * reads them to skip its own name/age step, and the profile is only created
  * on the wizard's final submit.
  */
 
-export const ENTRY_STORAGE_KEY = "looklab_entry";
+export const ENTRY_STORAGE_KEY = "halolabs_entry";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -171,7 +171,7 @@ export default function StartFunnel() {
                     className="mt-0.5 accent-[#DCE6EA]"
                   />
                   <span className="text-xs leading-relaxed text-paper/80">
-                    I&apos;m 18 or older. LookLab doesn&apos;t analyze anyone
+                    I&apos;m 18 or older. HaloLabs doesn&apos;t analyze anyone
                     under 18 — no exceptions.
                   </span>
                 </label>
@@ -290,7 +290,7 @@ export default function StartFunnel() {
                   Order summary /
                 </p>
                 <p className="mt-6 font-display text-xl font-medium">
-                  LookLab <span className="text-paper/60">Membership</span>
+                  HaloLabs <span className="text-paper/60">Membership</span>
                 </p>
                 <p className="mt-6 font-display text-5xl font-medium">
                   $0<span className="text-lg text-paper/60"> / forever</span>

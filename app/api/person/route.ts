@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   if (body.ageConfirmed18Plus !== true) {
     return NextResponse.json(
-      { error: "LookLab is 18+ only. The analysis cannot run without this confirmation." },
+      { error: "HaloLabs is 18+ only. The analysis cannot run without this confirmation." },
       { status: 403 }
     );
   }

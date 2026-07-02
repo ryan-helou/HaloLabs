@@ -17,7 +17,7 @@ export default function LoginForm() {
     const name = username.trim();
     if (!name) return;
     try {
-      window.localStorage.setItem("looklab_user", name);
+      window.localStorage.setItem("halolabs_user", name);
     } catch {
       /* ignore storage failures — still continue */
     }

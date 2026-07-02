@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const NAV = [
-  { label: "Why LookLab", href: "/#why-looklab" },
+  { label: "Why HaloLabs", href: "/#why-halolabs" },
   { label: "How it works", href: "/#how-it-works" },
   { label: "FAQ", href: "/#faq" },
 ];
@@ -9,7 +9,7 @@ const NAV = [
 export default function Header() {
   return (
     <div className="sticky top-4 z-40 px-4">
-      <header className="mx-auto flex max-w-[1500px] items-center justify-between rounded-full border border-line bg-surface/80 py-2.5 pl-3 pr-3 shadow-float backdrop-blur-md sm:pl-4 sm:pr-2.5">
+      <header className="mx-auto flex max-w-5xl items-center justify-between rounded-full border border-line/80 bg-surface/70 py-2.5 pl-3 pr-3 shadow-float backdrop-blur-xl sm:pl-4 sm:pr-2.5">
         <Link href="/" className="flex items-center gap-2.5">
           <span
             aria-hidden
@@ -18,7 +18,7 @@ export default function Header() {
             <span className="h-3 w-3 rounded-full border-[1.5px] border-pine" />
           </span>
           <span className="font-display text-[17px] font-semibold tracking-tight text-ink">
-            LookLab
+            HaloLabs
           </span>
         </Link>
 

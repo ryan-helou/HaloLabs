@@ -8,6 +8,7 @@ import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
 import PlanBoard from "@/components/PlanBoard";
+import ReportSection from "@/components/ReportSection";
 import type { Observations } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function generateMetadata({
   params: { id: string };
 }): Promise<Metadata> {
   const person = await loadPerson(decodeURIComponent(params.id));
-  return { title: person ? `${person.displayName} · LookLab` : "LookLab" };
+  return { title: person ? `${person.displayName} · HaloLabs` : "HaloLabs" };
 }
 
 const OBSERVATION_FIELDS: { key: keyof Observations; label: string }[] = [
@@ -37,84 +38,75 @@ export default async function PersonPage({ params }: { params: { id: string } })
   const progress = progressStore[id] ?? {};
   const extras = person.observations?.extras ?? [];
 
+  const observationRows: { label: string; text: string }[] = [
+    ...OBSERVATION_FIELDS.map(({ key, label }) => {
+      const value = person.observations?.[key];
+      return { label, text: typeof value === "string" ? value.trim() : "" };
+    }),
+    ...extras.map(({ label, note }) => ({ label, text: note })),
+    ...(person.observations?.generalNotes?.trim()
+      ? [{ label: "Notes", text: person.observations.generalNotes }]
+      : []),
+  ];
+
   return (
-    <div className="space-y-14">
+    // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
+    // page — the report runs in Qoves-style framed bands, not floating cards.
+    <div className="relative left-1/2 w-screen -translate-x-1/2 -mt-6">
       <PersonHero person={person} />
 
       {/* Plan cover letter — summary, strengths, expectations (v2 only). */}
       <PlanOverview person={person} />
 
-      {/* 01 · Observations */}
-      <section className="scroll-mt-24">
-        <div className="mb-4 flex items-baseline justify-between gap-3 border-b border-line pb-3">
-          <div className="flex items-baseline gap-3">
-            <span className="font-mono text-xs text-ink-soft">01</span>
-            <h2 className="font-display text-2xl text-ink">What the photos show</h2>
-          </div>
-          <Link
-            href={`/start/photos?id=${encodeURIComponent(person.id)}`}
-            className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
-          >
-            Add photos / re-analyze →
-          </Link>
-        </div>
-        <dl className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-          {OBSERVATION_FIELDS.map(({ key, label }, i) => {
-            const value = person.observations?.[key];
-            const text = typeof value === "string" ? value.trim() : "";
-            return (
+      {/* The report body: numbered acts stacked as one framed document. */}
+      <div className="border-b border-line">
+        {/* [01] Observations */}
+        <ReportSection
+          num="01"
+          titleA="What the"
+          titleB="photos show"
+          blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion below is built from."
+          rail={
+            <Link
+              href={`/start/photos?id=${encodeURIComponent(person.id)}`}
+              className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
+            >
+              Add photos / re-analyze →
+            </Link>
+          }
+        >
+          <dl className="divide-y divide-line">
+            {observationRows.map(({ label, text }) => (
               <div
-                key={key}
-                className={`grid gap-1 px-5 py-4 sm:grid-cols-[140px_1fr] sm:gap-6 sm:py-5 ${
-                  i > 0 ? "border-t border-line" : ""
-                }`}
+                key={label}
+                className="grid gap-1 px-6 py-5 sm:grid-cols-[150px_1fr] sm:gap-8 sm:px-8"
               >
                 <dt className="eyebrow pt-0.5">{label}</dt>
-                <dd className="text-[15px] leading-relaxed text-ink">
+                <dd className="max-w-prose text-[15px] leading-relaxed text-ink">
                   {text || <span className="text-ink-soft">Not noted.</span>}
                 </dd>
               </div>
-            );
-          })}
-          {/* v2 per-feature extras (under-eyes, brows, smile, posture…). */}
-          {extras.map(({ label, note }) => (
-            <div
-              key={label}
-              className="grid gap-1 border-t border-line px-5 py-4 sm:grid-cols-[140px_1fr] sm:gap-6 sm:py-5"
-            >
-              <dt className="eyebrow pt-0.5">{label}</dt>
-              <dd className="text-[15px] leading-relaxed text-ink">{note}</dd>
-            </div>
-          ))}
-          {person.observations?.generalNotes?.trim() && (
-            <div className="grid gap-1 border-t border-line px-5 py-4 sm:grid-cols-[140px_1fr] sm:gap-6 sm:py-5">
-              <dt className="eyebrow pt-0.5">Notes</dt>
-              <dd className="text-[15px] leading-relaxed text-ink">
-                {person.observations.generalNotes}
-              </dd>
-            </div>
-          )}
-        </dl>
-      </section>
+            ))}
+          </dl>
+        </ReportSection>
 
-      {/* 02 Analysis + 03 Protocol */}
-      <section>
+        {/* [02] Analysis + [03] Protocol */}
         <AdviceBoard advice={person.advice} />
-      </section>
 
-      {/* 04 Routine + 05 Roadmap + 06 Shopping & checkpoints (v2 only). */}
-      {hasPlan(person) && person.plan && (
-        <PlanBoard
-          personId={person.id}
-          plan={person.plan}
-          advice={person.advice}
-          initialProgress={progress}
-        />
-      )}
+        {/* [04] Routine + [05] Roadmap + [06] Shopping & checkpoints (v2 only). */}
+        {hasPlan(person) && person.plan && (
+          <PlanBoard
+            personId={person.id}
+            plan={person.plan}
+            advice={person.advice}
+            initialProgress={progress}
+          />
+        )}
+      </div>
 
       {/* Wellbeing note — quiet, always present. */}
-      <p className="border-t border-line pt-6 text-xs leading-relaxed text-ink-soft">
-        A reminder from LookLab: this plan describes options, not obligations —
+      <p className="mx-auto max-w-[1300px] px-6 py-10 text-xs leading-relaxed text-ink-soft sm:px-10">
+        A reminder from HaloLabs: this plan describes options, not obligations —
         and none of it is medical advice. If thinking about your appearance is
         weighing on you more than it should, step away from the mirror and talk
         to someone you trust or a professional. Nothing here is more important

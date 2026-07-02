@@ -2,18 +2,18 @@
 
 Walked the entire qoves.com landing page (~31,000px, 33 viewport captures) and
 their `/welcome/checkout` funnel with a scripted browser on 2026-07-01/02.
-This file is the reference for every layout/structure decision on the LookLab
+This file is the reference for every layout/structure decision on the HaloLabs
 landing page and onboarding.
 
 Their positioning: "Improve your looks without surgery" — $150/year,
 photo-based facial analysis + personalized non-surgical improvement protocol.
-Same shape as LookLab, so their page structure maps almost 1:1.
+Same shape as HaloLabs, so their page structure maps almost 1:1.
 
 ---
 
 ## 1. Landing page structure (top → bottom)
 
-| # | Section | What it does | LookLab status |
+| # | Section | What it does | HaloLabs status |
 |---|---------|--------------|----------------|
 | 1 | **Hero** — full-bleed portrait on blue-grey, "Improve your looks / without surgery" (second line lighter), sub, 2 pill CTAs (Start my plan / How it works), trust row at bottom (Based on science · Personalized · Without surgery) with hairline dividers | Instant value prop + zero-risk framing | ✅ Copied (`app/page.tsx` hero) |
 | 2 | **"As seen in"** press logo strip (Sun, Cosmopolitan, MIT TR, GQ, Wired, NY Post, USA Today, Guardian, Daily Mail) | Borrowed authority | ❌ Skipped — we have no press; faking it would be dishonest |
@@ -28,7 +28,7 @@ Same shape as LookLab, so their page structure maps almost 1:1.
 | 11 | **"No need for surgery"** — two large before/projection sliders + "See detailed transformation" links | More proof, repeated pattern | ⚠️ Skipped as separate section (sliders already in §3; avoid repeating with only 2 image pairs) |
 | 12 | **"Simply follow your plan / See your face transform"** — framed split, protocol timeline mockup (Key markers of health 0-1 month → Basic facial proportions 1-2 months → action steps) | Time-based expectation setting | ❌ Not yet — candidate for when plan phases ship in the viewer |
 | 13 | **"See your future you"** — center slider flanked by 4 feature cards (Realistic Visualization, Achievable Without Surgery, Ethnicity-Aware, Visualize Before Deciding) | Feature grid around visual | ❌ Skipped — we don't generate projections of the user |
-| 14 | **"Track your progress / Predict the future"** — biometric score cards (Facial Femininity 52, Homogeneity 38 "Too Low", Symmetry "Ideal", Visual Age) with YOU→IDEAL sliders + trend chart | Quantified-self hook | ❌ Deliberately skipped — LookLab is explicitly no-scores, no-ratings |
+| 14 | **"Track your progress / Predict the future"** — biometric score cards (Facial Femininity 52, Homogeneity 38 "Too Low", Symmetry "Ideal", Visual Age) with YOU→IDEAL sliders + trend chart | Quantified-self hook | ❌ Deliberately skipped — HaloLabs is explicitly no-scores, no-ratings |
 | 15 | **"The world's largest beauty science community"** — bento: 2M+ followers, Recommended by Leading Doctors, Surgery-Free, 100% Personalized, Science-Backed | Social proof bento | ❌ Skipped (no community/followers) |
 | 16 | **"160+ Aesthetic Tests"** — accordion of face regions with test counts (Eyes 26, Lips 16, Skin 20…), chips "tested 1x a year / from home" | Depth/comprehensiveness proof | ❌ Skipped for now — could become "what the analysis covers" accordion |
 | 17 | **Advisors** — 10 doctor cards with photos + bios (Dr. Lara Devgan, Dr. John Shamoun, …) | Heavyweight authority | ❌ Skipped — fabricating endorsements is a hard no |
@@ -37,12 +37,12 @@ Same shape as LookLab, so their page structure maps almost 1:1.
 | 20 | **Real user transformations** — masonry of genuine before/after selfies ("Team Member" tags, "achieved without any surgical interventions") | Rawest, most convincing proof on the page | ❌ Skipped until we have real consented examples |
 | 21 | **"Join 50,000+ people / Start your transformation."** — full-bleed lifestyle photo, CTA, horizontally scrolling testimonial cards with names | Big emotional CTA + testimonials | ⚠️ Copied the CTA ("See yourself clearly. / Start your transformation.") without fake counts/testimonials |
 | 22 | **"How it works / No clinic visits needed"** — 3 numbered cards: Upload Your Photos (6 clear photos, posed thumbnails) → Facial Assessments (160+ markers) → Personalized Report | The funnel explainer | ✅ Copied, mapped to our real flow (questionnaire → guided photos → plan) |
-| 23 | **Pricing** — "What could cost you ~~$10,000~~ is $150", left: 5-item checklist with subs; right: membership card mockup $150/yr, payment icons, Get Access; 3 trust chips (Trusted by 50,000+ · Secure Payment · Data Private) | Price anchoring vs surgery | ❌ Skipped — LookLab has no pricing. The $10k-anchor pattern is worth remembering if it ever does |
+| 23 | **Pricing** — "What could cost you ~~$10,000~~ is $150", left: 5-item checklist with subs; right: membership card mockup $150/yr, payment icons, Get Access; 3 trust chips (Trusted by 50,000+ · Secure Payment · Data Private) | Price anchoring vs surgery | ❌ Skipped — HaloLabs has no pricing. The $10k-anchor pattern is worth remembering if it ever does |
 | 24 | **"Your support system"** — Ask Any Question, Qoves Letter, Lifetime Tracking | Post-purchase reassurance | ❌ Skipped |
-| 25 | **FAQ** — two-tone heading, left category rail (9 categories), right accordion. Notable Q: "Can't I just do this with Chat GPT or Claude?" | Objection handling | ✅ Copied (single accordion, native `<details>`); kept the ChatGPT/Claude question and answered it honestly — LookLab *is* Claude, with structure |
+| 25 | **FAQ** — two-tone heading, left category rail (9 categories), right accordion. Notable Q: "Can't I just do this with Chat GPT or Claude?" | Objection handling | ✅ Copied (single accordion, native `<details>`); kept the ChatGPT/Claude question and answered it honestly — HaloLabs *is* Claude, with structure |
 | 26 | **"Will analyzing my face make me insecure?"** — dark video-bg, 3 reassurance cards (unique / clarity / control) | Psychological objection handling — smartest section on the page | ✅ Copied nearly verbatim in structure |
 | 27 | **"Is it vain to care about your appearance?"** — checklist card: Not chasing unrealistic standards / Not trying to look like someone else / Not seeking perfection / Aiming only for a better version of yourself | Ethics framing | ✅ Copied |
-| 28 | **Footer** — support email, disclaimer ("Some images digitally generated…"), link columns, giant gradient QOVES wordmark | Brand close | ✅ Copied (giant LOOKLAB gradient wordmark, disclaimer, link columns) |
+| 28 | **Footer** — support email, disclaimer ("Some images digitally generated…"), link columns, giant gradient QOVES wordmark | Brand close | ✅ Copied (giant HALOLABS gradient wordmark, disclaimer, link columns) |
 
 ## 2. Design system observations
 
@@ -88,9 +88,9 @@ So their order is: **commit (pay) → then personalize.** Classic paid-funnel
 logic: minimize fields before the credit card, harvest context after the sale
 is locked in.
 
-## 4. Questionnaire: LookLab vs Qoves
+## 4. Questionnaire: HaloLabs vs Qoves
 
-| Dimension | Qoves | LookLab (`components/OnboardingWizard.tsx`) |
+| Dimension | Qoves | HaloLabs (`components/OnboardingWizard.tsx`) |
 |---|---|---|
 | **Placement** | After payment, inside the app | Before anything else, free — `/start` |
 | **Pre-commit fields** | First name, last name, email only | Name + 18+ confirmation (step 1 of 5) |
@@ -113,7 +113,7 @@ funnel (`components/StartFunnel.tsx`):
    order summary card "$0 / forever — what could cost you ~~$150/year~~ is
    free", trust rows. "Join now" instead of a card form.
 4. **Then** the questionnaire (`/start/quiz`, wizard skips its name/18+ step
-   via the `looklab_entry` localStorage handoff) → guided photos → plan.
+   via the `halolabs_entry` localStorage handoff) → guided photos → plan.
 
 Remaining difference in intake content: theirs is demographic (smoking,
 drinking, allergies, profession), ours is motivation/constraint-driven
@@ -123,13 +123,16 @@ genuinely use those.
 
 ## 5. Ideas parked for later
 
-- **Protocol timeline** (their §12): phase cards with month ranges — adopt
-  when plan phases render in the viewer.
+- ~~**Protocol timeline** (their §12): phase cards with month ranges~~ —
+  **adopted 2026-07-02**: the `/person/<id>` roadmap act renders phases as
+  hairline-divided columns with mono "Phase N / window" labels. The whole
+  report page now uses the §2 design system (framed acts, two-tone
+  headings, `[01]` numerals, sticky rails) via `components/ReportSection.tsx`.
 - **"What the analysis covers" accordion** (their 160+ tests pattern) mapped
   to our observation categories.
 - **Real consented before/after gallery** — their strongest proof; only with
   real users.
-- **$10k price-anchor pricing section** — only if LookLab is ever paid.
+- **$10k price-anchor pricing section** — only if HaloLabs is ever paid.
 - Lifestyle facts in intake: sleep, smoking, sun, climate (they collect these
   post-payment; our skill could use them too).
 
@@ -139,4 +142,4 @@ Fabricated authority: press logos, doctor advisor grids, "50,000+ people",
 named testimonials, follower counts, star ratings. The structure carries the
 persuasion; the claims stay honest. Also excluded by principle: scores/ratings
 ("Homogeneity 38 — Too Low"), visual-age numbers, and surgical add-ons — the
-entire LookLab stance is observations and options, never grades.
+entire HaloLabs stance is observations and options, never grades.

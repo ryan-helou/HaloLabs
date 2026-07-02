@@ -18,10 +18,10 @@ import {
  * the rest is skippable, but the more it knows the better the plan.
  *
  * When the /start funnel already collected name + 18+ (stored under
- * `looklab_entry`), step 1 is skipped entirely — the wizard starts at goals.
+ * `halolabs_entry`), step 1 is skipped entirely — the wizard starts at goals.
  */
 
-const ENTRY_STORAGE_KEY = "looklab_entry";
+const ENTRY_STORAGE_KEY = "halolabs_entry";
 
 const STEP_TITLES = [
   "Before we start",
@@ -152,7 +152,7 @@ export default function OnboardingWizard() {
       return;
     }
     try {
-      const stored = window.localStorage.getItem("looklab_user");
+      const stored = window.localStorage.getItem("halolabs_user");
       if (stored) setDisplayName(stored);
     } catch {
       /* ignore */
@@ -220,7 +220,7 @@ export default function OnboardingWizard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Something went wrong");
       try {
-        window.localStorage.setItem("looklab_user", displayName.trim());
+        window.localStorage.setItem("halolabs_user", displayName.trim());
         window.localStorage.removeItem(ENTRY_STORAGE_KEY);
       } catch {
         /* ignore */
@@ -303,7 +303,7 @@ export default function OnboardingWizard() {
               <span className="text-sm leading-relaxed text-ink">
                 I&apos;m 18 or older.
                 <span className="mt-0.5 block text-xs text-ink-soft">
-                  LookLab doesn&apos;t analyze anyone under 18 — no exceptions.
+                  HaloLabs doesn&apos;t analyze anyone under 18 — no exceptions.
                 </span>
               </span>
             </label>

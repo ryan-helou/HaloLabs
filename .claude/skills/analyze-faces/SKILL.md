@@ -1,6 +1,6 @@
 ---
 name: analyze-faces
-description: Analyze person-folders of photos using your own vision and write structured observations + a full personalized plan (v2) to data/results.json. Use when the user asks to analyze faces, run LookLab analysis, process new person folders, or refresh a person's results.
+description: Analyze person-folders of photos using your own vision and write structured observations + a full personalized plan (v2) to data/results.json. Use when the user asks to analyze faces, run HaloLabs analysis, process new person folders, or refresh a person's results.
 ---
 
 # analyze-faces (schema v2)
@@ -17,7 +17,7 @@ Analyze folders of a person's photos and produce:
    an AM/PM/weekly routine, a shopping list, and re-photo checkpoints —
    shaped by the person's onboarding answers in `profile.json`.
 
-Results go to a single flat JSON file (`data/results.json`) that the LookLab
+Results go to a single flat JSON file (`data/results.json`) that the HaloLabs
 viewer reads. You (Claude) view the images directly with your own vision —
 this skill makes **no** Anthropic API calls and uses no external services.
 The product constitution is `docs/STRATEGY.md`; when in doubt, its section 3
@@ -77,7 +77,7 @@ button (`/api/analyze` spawns `claude -p "Run the analyze-faces skill with
 
 ## Configuration
 
-- People root: env var `LOOKLAB_PEOPLE_DIR` if set, else `./data/people`.
+- People root: env var `HALOLABS_PEOPLE_DIR` if set, else `./data/people`.
 - Results file: `./data/results.json`.
 - Onboarding: `./data/people/<id>/profile.json` (may be absent for legacy folders).
 - Valid image extensions: `.jpg`, `.jpeg`, `.png`, `.webp` (case-insensitive).

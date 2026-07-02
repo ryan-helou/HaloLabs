@@ -1,4 +1,4 @@
-# LookLab
+# HaloLabs
 
 A **local-only, single-user** facial-analysis and glow-up-plan tool. Three
 parts share one data folder:
