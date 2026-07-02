@@ -31,7 +31,7 @@ const OLD_WAY = [
 
 const NEW_WAY = [
   "Consider your face holistically",
-  "LookLab analysis",
+  "HaloLabs analysis",
   "Honest observations",
   "Personalized suggestions",
   "Real results",
@@ -92,7 +92,7 @@ const REASSURANCE = [
 
 const FAQ = [
   {
-    q: "What is LookLab?",
+    q: "What is HaloLabs?",
     a: "A personal grooming analysis. You answer a short onboarding, add guided photos, and Claude studies them locally and writes a personalized plan — observations, prioritized suggestions, a daily routine, a shopping list, and progress checkpoints.",
   },
   {
@@ -105,7 +105,7 @@ const FAQ = [
   },
   {
     q: "Can't I just ask ChatGPT or Claude directly?",
-    a: "LookLab is Claude — but with a structured methodology. The analyze-faces skill reviews every photo systematically, writes findings to a consistent format, and the viewer keeps everything organized and comparable over time instead of lost in a chat thread.",
+    a: "HaloLabs is Claude — but with a structured methodology. The analyze-faces skill reviews every photo systematically, writes findings to a consistent format, and the viewer keeps everything organized and comparable over time instead of lost in a chat thread.",
   },
   {
     q: "Is my data private?",
@@ -128,26 +128,6 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
     <span className="inline-flex rounded-full border border-line px-3 py-1 font-mono text-[10px] uppercase tracking-label text-ink-soft">
       {children}
     </span>
-  );
-}
-
-function TwoTone({
-  a,
-  b,
-  className = "",
-}: {
-  a: string;
-  b: string;
-  className?: string;
-}) {
-  return (
-    <h2
-      className={`font-display text-4xl font-medium leading-[1.06] tracking-tight text-ink sm:text-5xl ${className}`}
-    >
-      {a}
-      <br />
-      <span className="text-pine/50">{b}</span>
-    </h2>
   );
 }
 
@@ -188,13 +168,13 @@ export default function HomePage() {
       <section className="relative -mt-6 overflow-hidden bg-gradient-to-br from-panel via-[#AEBEC7] to-[#8FA3AD]">
         <div className="mx-auto grid max-w-[1500px] items-end gap-8 px-6 pt-24 sm:px-10 lg:grid-cols-2 lg:pt-28">
           <div className="pb-16 lg:pb-24">
-            <p className="text-sm font-medium text-pine-deep/80">
+            <p className="font-mono text-[11px] uppercase tracking-label text-pine-deep/80">
               An honest mirror, powered by Claude
             </p>
             <h1 className="mt-4 font-display text-5xl font-medium leading-[1.02] tracking-tight text-ink sm:text-6xl lg:text-7xl">
               Improve your looks
               <br />
-              <span className="text-surface/90">without surgery</span>
+              <span className="text-surface">without surgery</span>
             </h1>
             <p className="mt-6 max-w-md text-[15px] leading-relaxed text-pine-deep">
               Get a personalized facial analysis and transformation plan based
@@ -203,7 +183,7 @@ export default function HomePage() {
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
                 href="#login"
-                className="rounded-full bg-surface px-6 py-3 text-[15px] font-medium text-ink shadow-float transition-colors hover:bg-paper"
+                className="rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep"
               >
                 Start my plan
               </a>
@@ -253,12 +233,12 @@ export default function HomePage() {
             <h2 className="mt-8 font-display text-5xl font-medium leading-[1.04] tracking-tight text-ink sm:text-6xl">
               Life-changing
               <br />
-              <span className="text-pine/50">Transformations</span>
+              <span className="text-pine">Transformations</span>
             </h2>
 
             <p className="mt-6 max-w-md text-[15px] leading-relaxed text-ink-soft">
               Research consistently demonstrates the diverse, wide-ranging
-              benefits of physical attractiveness. LookLab reads your photos and
+              benefits of physical attractiveness. HaloLabs reads your photos and
               builds a personalized plan to get there.
             </p>
 
@@ -304,11 +284,11 @@ export default function HomePage() {
       </Frame>
 
       {/* ------------------------------- 3 · Research proof (#why) */}
-      <section id="why-looklab" className="scroll-mt-24 py-20 sm:py-24">
+      <section id="why-halolabs" className="scroll-mt-24 py-20 sm:py-24">
         <div className="mx-auto max-w-[1500px] px-6 sm:px-10">
           <h2 className="max-w-4xl font-display text-4xl font-medium leading-[1.08] tracking-tight text-ink sm:text-5xl lg:text-6xl">
             Studies show your looks influence{" "}
-            <span className="text-pine/50">
+            <span className="text-pine">
               almost everything, from your career to your romantic life.
             </span>
           </h2>
@@ -324,7 +304,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>Personalized analysis</Eyebrow>
             <h2 className="mt-6 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
-              A new way to <span className="text-pine/50">glow-up</span>
+              A new way to <span className="text-pine">glow-up</span>
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">
               Looking your best is confusing — conflicting advice, filtered
@@ -370,7 +350,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1500px] px-6 sm:px-10">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="font-display text-4xl font-medium tracking-tight sm:text-5xl">
-              Your complete <span className="text-paper/50">facial analysis</span>
+              Your complete <span className="text-paper/70">facial analysis</span>
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-paper/70">
               Every face is unique. Every photo is studied — hair, skin, brows,
@@ -444,7 +424,7 @@ export default function HomePage() {
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-[1500px] px-6 sm:px-10">
           <h2 className="text-center font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
-            You will <span className="text-pine/50">learn..</span>
+            What you&apos;ll <span className="text-pine">learn</span>
           </h2>
           <div className="mx-auto mt-12 max-w-2xl space-y-4">
             {LEARN_ITEMS.map((item, i) => (
@@ -475,7 +455,7 @@ export default function HomePage() {
             <h2 className="mt-6 font-display text-4xl font-medium leading-[1.06] tracking-tight sm:text-5xl">
               Get your personalized
               <br />
-              <span className="text-paper/50">LookLab plan</span>
+              <span className="text-paper/70">HaloLabs plan</span>
             </h2>
             <p className="mt-5 max-w-md text-[15px] leading-relaxed text-paper/70">
               Understand your features and take action today with a plan written
@@ -540,9 +520,9 @@ export default function HomePage() {
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>How it works</Eyebrow>
             <h2 className="mt-6 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
-              How it works
+              From photos to plan,
               <br />
-              <span className="text-pine/50">No clinic visits needed</span>
+              <span className="text-pine">no clinic visits needed</span>
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-ink-soft">
               Get your personalized facial analysis from the comfort of your
@@ -572,7 +552,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1500px] px-6 sm:px-10">
           <h2 className="mx-auto max-w-2xl text-center font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
             Will analyzing my face{" "}
-            <span className="text-pine/50">make me insecure?</span>
+            <span className="text-pine">make me insecure?</span>
           </h2>
           <div className="mt-12 grid gap-4 lg:grid-cols-3">
             {REASSURANCE.map((r) => (
@@ -620,7 +600,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-2xl text-center">
             <Eyebrow>Your questions</Eyebrow>
             <h2 className="mt-6 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
-              Frequently asked <span className="text-pine/50">questions</span>
+              Frequently asked <span className="text-pine">questions</span>
             </h2>
           </div>
 
@@ -651,7 +631,7 @@ export default function HomePage() {
           <h2 className="mx-auto max-w-3xl font-display text-4xl font-medium leading-[1.06] tracking-tight text-ink sm:text-6xl">
             See yourself clearly.
             <br />
-            <span className="text-surface/90">Start your transformation.</span>
+            <span className="text-surface">Start your transformation.</span>
           </h2>
           <div className="mt-10">
             <StartCta />

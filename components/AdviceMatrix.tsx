@@ -47,7 +47,7 @@ export default function AdviceMatrix({ items }: { items: MatrixItem[] }) {
   const activePos = active ? pos.get(active.id)! : null;
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="eyebrow">The map</p>

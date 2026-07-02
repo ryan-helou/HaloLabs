@@ -26,7 +26,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LookLab",
+  title: "HaloLabs",
   description: "A personal grooming analysis — read-only viewer for analyze-faces results.",
 };
 
@@ -44,7 +44,7 @@ export default function RootLayout({
           <div className="mx-auto grid max-w-[1500px] gap-10 px-6 py-12 sm:px-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                LookLab /
+                HaloLabs /
               </p>
               <p className="mt-4 max-w-md text-xs leading-relaxed text-ink-soft">
                 Every observation and suggestion is written in Claude Code by
@@ -66,8 +66,8 @@ export default function RootLayout({
                 </p>
                 <ul className="mt-4 space-y-2.5 text-sm">
                   <li>
-                    <a href="/#why-looklab" className="text-ink-soft transition-colors hover:text-ink">
-                      Why LookLab
+                    <a href="/#why-halolabs" className="text-ink-soft transition-colors hover:text-ink">
+                      Why HaloLabs
                     </a>
                   </li>
                   <li>
@@ -105,7 +105,7 @@ export default function RootLayout({
             aria-hidden
             className="mx-auto -mb-[0.23em] max-w-[1500px] select-none whitespace-nowrap bg-gradient-to-br from-pine via-panel to-[#8FA3AD] bg-clip-text px-2 text-center font-display text-[19.5vw] font-semibold leading-none tracking-tight text-transparent lg:text-[280px]"
           >
-            LOOKLAB
+            HALOLABS
           </p>
         </footer>
       </body>

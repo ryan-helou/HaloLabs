@@ -1,4 +1,4 @@
-# LookLab — session handoff
+# HaloLabs — session handoff
 
 Local-only, single-user glow-up-plan tool. Full product flow shipped
 2026-07-02: onboarding → guided photos → local analysis → plan with routine,
@@ -45,15 +45,22 @@ Don't `npm run build` while dev is running (clobbers `.next`).
   (`.analysis.{json,exit,log}`) in the person folder; page polls GET
   `/api/analyze?id=` every 3s → done screen links to the plan. Error state
   shows copy-paste manual fallback (`run analyze-faces --force <id>`).
-- `/person/<id>` — the deliverable: `PlanOverview` (dark gradient card:
-  summary + builtFor chips + strengths + honest expectations) → 01
-  observations (+ v2 `extras` rows) → 02 Analysis (stat strip + matrix) → 03
-  Protocol (quick-wins shortlist + per-category `SuggestionRow`s, now with
-  v2 detail: Why-you callout, How-to steps, product chips,
-  frequency/timeline/evidence metaline) → `PlanBoard` (04 routine AM/PM/
-  weekly, 05 roadmap: 3 phases with optimistic check-offs → POST
-  `/api/progress` → `data/progress.json`, 06 shopping list + checkpoints) →
-  wellbeing footnote.
+- `/person/<id>` — the deliverable, reformatted 2026-07-02 in the landing's
+  Qoves report language (full-bleed breakout, hairline-framed acts, no
+  rounded shadow cards): `PersonHero` cover band (panel gradient, two-tone
+  name, photo viewer + lightbox, divided stat row) → `PlanOverview` (dark
+  full-bleed split band: summary + builtFor chips + expectations left,
+  `[1]`-numbered strengths right) → acts `[01]`–`[06]`, each a
+  `ReportSection` (shared shell: sticky left rail with bracket numeral +
+  two-tone heading + blurb + optional rail content; edge-to-edge divided
+  content right). [01] observations dl (+ v2 `extras`) · [02] stat strip +
+  impact/effort matrix · [03] protocol (clay "Start here /" shortlist,
+  Legend in the rail, per-category `SuggestionRow`s with v2 detail) · [04]
+  routine as divided AM/PM/weekly columns · [05] roadmap as the Qoves
+  protocol-timeline: phase columns with mono "Phase N / window" labels and
+  optimistic check-offs → POST `/api/progress` → `data/progress.json`
+  (overall progress bar lives in the rail) · [06] shopping list &
+  checkpoints split → wellbeing footnote.
 - `/profiles` — roster + "+ New analysis".
 
 ## Schema v2 (lib/types.ts is the single source of truth)
@@ -87,6 +94,22 @@ Routine/Roadmap when a plan exists). `CompareSlider`/`LandmarkOverlay`
 components still exist but are unused — CompareSlider is earmarked for real
 before/after progress pairs later.
 
+## Report reformat (2026-07-02, "format the plan just like Qoves")
+The whole `/person/<id>` page now uses the landing page's Qoves design
+language (see docs/qoves-teardown.md §2). Key pieces:
+- `components/ReportSection.tsx` — shared act shell: `border-t` framed
+  sections stacking flush inside a `border-b` wrapper (page.tsx), inner
+  `max-w-[1300px]` canvas with `lg:border-x`, 4fr/8fr rail/content split,
+  rail is `lg:sticky lg:top-24`. Content renders edge-to-edge so acts run
+  divided grids (`divide-x` columns / `divide-y` rows) out to the frame.
+- PersonHero became the cover band (landing-hero gradient + trust-row
+  pattern with real stats); PlanOverview became the dark split band
+  (landing §7 pattern). Playwright-verified on desktop (incl. sticky rail
+  mid-scroll) + 390px mobile, in dev and in the prod build.
+- The old Playwright smoke suite's text selectors for section headings
+  ("Analysis", "Roadmap"…) are stale — headings are now two-tone ("Your
+  facial / analysis" etc.) and the suite scratchpad was session-local.
+
 ## Id casing gotcha
 Onboarding slugs are lowercase (`ryan-helou`) while the original folder was
 `Ryan-Helou` — same folder on macOS (case-insensitive FS). The user's own
@@ -104,7 +127,7 @@ case-insensitive so both URL casings resolve.
 
 ## Verification state (2026-07-02)
 - `tsc --noEmit` clean; `npm run build` clean (all routes compile).
-- Playwright smoke suite 25/25 (scratchpad `test_looklab.py`): wizard
+- Playwright smoke suite 25/25 (scratchpad `test_halolabs.py`): wizard
   end-to-end incl. 18+ gating, capture checklist, uploads grid, plan
   sections, progress toggle + persistence + counter, v2 fields render,
   profiles page.

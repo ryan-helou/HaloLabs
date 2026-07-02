@@ -1,8 +1,10 @@
 import type { Person } from "@/lib/types";
 
 /**
- * The plan's cover letter — summary, what it was built around, what already
- * works, and honest expectations. Strengths always render before anything
+ * The plan's cover letter — a dark full-bleed split band in the landing
+ * page's "Get your personalized plan" pattern: eyebrow pill, two-tone
+ * heading, and summary on the left; strengths as a bracket-numbered list
+ * behind a hairline on the right. Strengths always render before anything
  * else on the page mentions changing: lead with what works.
  */
 export default function PlanOverview({ person }: { person: Person }) {
@@ -10,13 +12,20 @@ export default function PlanOverview({ person }: { person: Person }) {
   if (!plan?.summary?.trim()) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-pine-deep to-pine text-paper shadow-float">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <div className="p-7 sm:p-9">
-          <p className="font-mono text-[10px] uppercase tracking-label text-paper/60">
-            Your plan · at a glance
-          </p>
-          <p className="mt-4 max-w-prose text-[15px] leading-relaxed text-paper/90">
+    <section className="bg-gradient-to-br from-[#3A3F44] via-pine-deep to-[#5B7280] text-paper">
+      <div className="mx-auto grid max-w-[1300px] gap-12 px-6 py-16 sm:px-10 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:py-20">
+        <div>
+          <span className="inline-flex rounded-full border border-paper/25 px-3 py-1 font-mono text-[10px] uppercase tracking-label text-paper/70">
+            Your plan / at a glance
+          </span>
+
+          <h2 className="mt-6 font-display text-4xl font-medium leading-[1.06] tracking-tight sm:text-5xl">
+            Your personalized
+            <br />
+            <span className="text-paper/50">plan</span>
+          </h2>
+
+          <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-paper/80">
             {plan.summary}
           </p>
 
@@ -34,7 +43,7 @@ export default function PlanOverview({ person }: { person: Person }) {
           )}
 
           {plan.expectations?.trim() && (
-            <p className="mt-6 border-t border-paper/20 pt-5 text-sm leading-relaxed text-paper/70">
+            <p className="mt-8 max-w-xl border-t border-paper/20 pt-5 text-sm leading-relaxed text-paper/70">
               <span className="font-medium text-paper/90">Honest expectations: </span>
               {plan.expectations}
             </p>
@@ -42,20 +51,20 @@ export default function PlanOverview({ person }: { person: Person }) {
         </div>
 
         {plan.strengths.length > 0 && (
-          <div className="border-t border-paper/15 bg-paper/5 p-7 sm:p-9 lg:border-l lg:border-t-0">
+          <div className="border-t border-paper/15 pt-8 lg:border-l lg:border-t-0 lg:pl-10 lg:pt-0">
             <p className="font-mono text-[10px] uppercase tracking-label text-paper/60">
-              Already working for you
+              Already working for you /
             </p>
-            <ul className="mt-4 space-y-3">
-              {plan.strengths.map((s) => (
-                <li key={s} className="flex items-baseline gap-3">
-                  <span aria-hidden className="text-paper/60">
-                    ✓
+            <ol className="mt-6 space-y-4">
+              {plan.strengths.map((s, i) => (
+                <li key={s} className="flex items-baseline gap-6">
+                  <span className="w-7 shrink-0 font-mono text-xs text-paper/50">
+                    [{i + 1}]
                   </span>
-                  <span className="text-sm leading-relaxed text-paper/90">{s}</span>
+                  <span className="text-[15px] leading-relaxed text-paper/90">{s}</span>
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
         )}
       </div>

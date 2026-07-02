@@ -151,10 +151,10 @@ export default function ResearchTabs() {
         {CATEGORIES[active].cards.map((card) => (
           <article
             key={card.title}
-            className="flex min-h-[260px] flex-col rounded-xl border border-line bg-surface p-6 shadow-card"
+            className="flex min-h-[190px] flex-col rounded-xl border border-line bg-surface p-6 shadow-card"
           >
             <h3 className="text-xl font-medium text-ink">
-              <span className="text-pine/60">{card.accent}</span> {card.title}
+              <span className="text-pine">{card.accent}</span> {card.title}
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-ink">{card.body}</p>
             <p className="mt-auto pt-6 font-mono text-[10.5px] leading-relaxed text-ink-soft">

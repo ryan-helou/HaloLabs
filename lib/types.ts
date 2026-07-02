@@ -1,4 +1,4 @@
-// Shared data contract for LookLab.
+// Shared data contract for HaloLabs.
 //
 // This file is the single source of truth for the shape of results.json,
 // profile.json (onboarding), and progress.json. Both the analyze-faces Claude

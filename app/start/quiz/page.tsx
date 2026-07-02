@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import OnboardingWizard from "@/components/OnboardingWizard";
 
 export const metadata: Metadata = {
-  title: "Your questionnaire · LookLab",
+  title: "Your questionnaire · HaloLabs",
 };
 
 export default function QuizPage() {

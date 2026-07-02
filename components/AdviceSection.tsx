@@ -46,7 +46,7 @@ export default function AdviceSection({
       </div>
 
       {ordered.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-line px-5 py-6 text-sm text-ink-soft">
+        <p className="border border-dashed border-line px-5 py-6 text-sm text-ink-soft">
           Nothing flagged here — the photos didn&apos;t suggest anything for{" "}
           {title.toLowerCase()}.
         </p>

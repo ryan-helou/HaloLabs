@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import CaptureFlow from "@/components/CaptureFlow";
 
 export const metadata: Metadata = {
-  title: "Add photos · LookLab",
+  title: "Add photos · HaloLabs",
 };
 
 export default function StartPhotosPage() {

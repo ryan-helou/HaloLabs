@@ -1,4 +1,4 @@
-# LookLab Strategy — what we NEED to do, what we COULD do, what we must NEVER do
+# HaloLabs Strategy — what we NEED to do, what we COULD do, what we must NEVER do
 
 *Synthesized 2026-07-02 from four research streams: (1) a first-hand r/QOVESStudio
 customer thread, (2) a deep-dive on QOVES's product and reports (site, sample
@@ -21,7 +21,7 @@ routine, no schedule, and no progress loop** — and its own customers' #1 recor
 request is *"just tell me where, how, and who — hold my hand."* Nobody credibly
 owns the middle: **fast analysis → a prioritized, personalized plan with named
 options, routines, costs and timelines → honest expectations → progress
-tracking over weeks.** That middle is LookLab. We win by being the most
+tracking over weeks.** That middle is HaloLabs. We win by being the most
 *actionable* and the most *trustworthy* product in the category — and trust is
 built by the NEVER list as much as the NEED list.
 
@@ -234,9 +234,9 @@ built by the NEVER list as much as the NEED list.
 
 ---
 
-## 4. How this maps onto LookLab as built
+## 4. How this maps onto HaloLabs as built
 
-| Research finding | LookLab implementation |
+| Research finding | HaloLabs implementation |
 |---|---|
 | Plan > report; "hold my hand" | `plan` object: phases, AM/PM/weekly routine, shopping list, checkpoints |
 | Onboarding callbacks | `/start` wizard → `profile.json` → skill quotes it in `plan.summary` and suggestion `why` |

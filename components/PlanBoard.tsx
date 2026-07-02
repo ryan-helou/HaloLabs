@@ -9,29 +9,19 @@ import type {
 } from "@/lib/types";
 import { CATEGORY_META } from "@/lib/categories";
 import { flattenAdvice } from "@/lib/plan";
+import ReportSection from "./ReportSection";
 
 /**
- * Acts 04–06 of the person page: the actionable plan.
- *   04 · Your routine    — AM / PM / weekly schedule
- *   05 · Roadmap         — phased suggestions with check-offs (progress.json)
- *   06 · Shopping list & checkpoints
+ * Acts [04]–[06] of the report: the actionable plan.
+ *   [04] Your daily routine    — AM / PM / weekly as hairline-divided columns
+ *   [05] Your phased roadmap   — the Qoves protocol-timeline pattern: phase
+ *        columns with mono window labels and check-offs (progress.json)
+ *   [06] Shopping list & checkpoints
  *
  * Check-offs are optimistic; the API write is fire-and-forget with rollback
  * on failure. Progress tracks the suggestion, and like every tag in the app
  * it never rates the person.
  */
-
-function ActHeader({ num, title, id }: { num: string; title: string; id?: string }) {
-  return (
-    <div
-      id={id}
-      className="mb-5 flex scroll-mt-24 items-baseline gap-3 border-b border-line pb-3"
-    >
-      <span className="font-mono text-xs text-ink-soft">{num}</span>
-      <h2 className="font-display text-2xl text-ink">{title}</h2>
-    </div>
-  );
-}
 
 const SLOT_META: Record<RoutineSlot, { title: string; sub: string; icon: string }> = {
   am: { title: "Morning", sub: "Every day", icon: "☀" },
@@ -87,48 +77,49 @@ export default function PlanBoard({
   const routineBySlot = (slot: RoutineSlot) =>
     (plan.routine ?? []).filter((r) => r.slot === slot);
 
-  const totalPlanned = plan.phases.reduce((n, p) => n + p.suggestionIds.length, 0);
-  const totalDone = plan.phases.reduce(
+  // A phase with nothing in it (e.g. nothing to maintain yet) is noise —
+  // skip it rather than render an empty column.
+  const phases = plan.phases.filter((p) => p.suggestionIds.length > 0);
+  const totalPlanned = phases.reduce((n, p) => n + p.suggestionIds.length, 0);
+  const totalDone = phases.reduce(
     (n, p) => n + p.suggestionIds.filter((sid) => progress[sid]?.done).length,
     0
   );
+  const totalPct = totalPlanned ? Math.round((totalDone / totalPlanned) * 100) : 0;
 
   return (
-    <div className="space-y-14">
-      {/* ── Act 04 · Routine ─────────────────────────────────────────── */}
+    <>
+      {/* ── [04] Routine ─────────────────────────────────────────────── */}
       {plan.routine.length > 0 && (
-        <section>
-          <ActHeader num="04" title="Your routine" id="routine" />
-          <p className="-mt-1 mb-5 max-w-xl text-[15px] leading-relaxed text-ink-soft">
-            The repeating part of the plan, in the order to apply things.
-            Introduce one new product at a time — give each two weeks before
-            adding the next.
-          </p>
-          <div className="grid gap-4 md:grid-cols-3">
+        <ReportSection
+          num="04"
+          titleA="Your daily"
+          titleB="routine"
+          id="routine"
+          blurb="The repeating part of the plan, in the order to apply things. Introduce one new product at a time — give each two weeks before adding the next."
+        >
+          <div className="grid divide-y divide-line md:grid-flow-col md:auto-cols-fr md:divide-x md:divide-y-0">
             {(Object.keys(SLOT_META) as RoutineSlot[]).map((slot) => {
               const steps = routineBySlot(slot);
               if (steps.length === 0) return null;
               const meta = SLOT_META[slot];
               return (
-                <div
-                  key={slot}
-                  className="rounded-2xl border border-line bg-surface p-5 shadow-card"
-                >
-                  <div className="flex items-baseline justify-between">
-                    <h3 className="font-display text-lg text-ink">
-                      <span aria-hidden className="mr-2 text-pine">
-                        {meta.icon}
-                      </span>
-                      {meta.title}
-                    </h3>
-                    <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                      {meta.sub}
+                <div key={slot} className="px-6 py-8 sm:px-8">
+                  <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
+                    {meta.sub} /
+                  </p>
+                  <h3 className="mt-2 font-display text-2xl text-ink">
+                    <span aria-hidden className="mr-2 text-pine">
+                      {meta.icon}
                     </span>
-                  </div>
-                  <ol className="mt-4 space-y-2.5">
+                    {meta.title}
+                  </h3>
+                  <ol className="mt-5 space-y-3">
                     {steps.map((step, i) => (
-                      <li key={i} className="flex items-baseline gap-3">
-                        <span className="font-mono text-xs text-pine">{i + 1}</span>
+                      <li key={i} className="flex items-baseline gap-4">
+                        <span className="w-7 shrink-0 font-mono text-xs text-pine">
+                          [{i + 1}]
+                        </span>
                         <span className="flex-1 text-sm leading-relaxed text-ink">
                           {step.step}
                           {step.suggestionId && byId.has(step.suggestionId) && (
@@ -148,69 +139,58 @@ export default function PlanBoard({
               );
             })}
           </div>
-        </section>
+        </ReportSection>
       )}
 
-      {/* ── Act 05 · Roadmap ─────────────────────────────────────────── */}
-      {plan.phases.length > 0 && (
-        <section>
-          <ActHeader num="05" title="Roadmap" id="roadmap" />
-          <div className="-mt-1 mb-5 flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-xl text-[15px] leading-relaxed text-ink-soft">
-              Work the phases in order — early wins fund the patience the
-              slower changes need. Check things off as they become habits.
-            </p>
-            <span className="rounded-full border border-line bg-surface px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-label text-ink-soft">
-              {totalDone}/{totalPlanned} done
-            </span>
-          </div>
-
-          <div className="space-y-4">
-            {plan.phases.map((phase) => {
-              // A phase with nothing in it (e.g. nothing to maintain yet) is
-              // noise — skip it rather than render an empty box.
-              if (phase.suggestionIds.length === 0) return null;
-              const done = phase.suggestionIds.filter((sid) => progress[sid]?.done).length;
-              const pct = phase.suggestionIds.length
-                ? Math.round((done / phase.suggestionIds.length) * 100)
-                : 0;
-              return (
+      {/* ── [05] Roadmap — the protocol timeline ─────────────────────── */}
+      {phases.length > 0 && (
+        <ReportSection
+          num="05"
+          titleA="Your phased"
+          titleB="roadmap"
+          id="roadmap"
+          blurb="Work the phases in order — early wins fund the patience the slower changes need. Check things off as they become habits."
+          rail={
+            <div>
+              <div className="flex items-baseline justify-between font-mono text-[10px] uppercase tracking-label text-ink-soft">
+                <span>Progress</span>
+                <span>
+                  {totalDone}/{totalPlanned} done
+                </span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
                 <div
-                  key={phase.number}
-                  className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-4 sm:px-6">
-                    <div className="flex items-baseline gap-3">
-                      <span className="font-mono text-xs text-pine">
-                        P{phase.number}
-                      </span>
-                      <h3 className="font-display text-xl text-ink">{phase.title}</h3>
-                      <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                        {phase.window}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="h-1.5 w-28 overflow-hidden rounded-full bg-line">
-                        <div
-                          className="h-full rounded-full bg-pine transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-[10px] text-ink-soft">
-                        {done}/{phase.suggestionIds.length}
-                      </span>
-                    </div>
+                  className="h-full rounded-full bg-pine transition-all"
+                  style={{ width: `${totalPct}%` }}
+                />
+              </div>
+            </div>
+          }
+        >
+          <div className="grid divide-y divide-line lg:grid-flow-col lg:auto-cols-fr lg:divide-x lg:divide-y-0">
+            {phases.map((phase) => {
+              const done = phase.suggestionIds.filter((sid) => progress[sid]?.done).length;
+              return (
+                <div key={phase.number} className="px-6 py-8 sm:px-8">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="font-mono text-[10px] uppercase tracking-label text-pine">
+                      Phase {phase.number} / {phase.window}
+                    </p>
+                    <span className="font-mono text-[10px] text-ink-soft">
+                      {done}/{phase.suggestionIds.length}
+                    </span>
                   </div>
-                  <p className="border-b border-line px-5 py-3 text-sm text-ink-soft sm:px-6">
+                  <h3 className="mt-2 font-display text-2xl text-ink">{phase.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-ink-soft">
                     {phase.focus}
                   </p>
-                  <ul className="divide-y divide-line">
+                  <ul className="mt-6 divide-y divide-line border-t border-line">
                     {phase.suggestionIds.map((sid) => {
                       const info = byId.get(sid);
                       const isDone = progress[sid]?.done ?? false;
                       if (!info) return null;
                       return (
-                        <li key={sid} className="flex items-center gap-4 px-5 py-3 sm:px-6">
+                        <li key={sid} className="flex items-center gap-3 py-3">
                           <button
                             type="button"
                             role="checkbox"
@@ -225,17 +205,21 @@ export default function PlanBoard({
                           >
                             ✓
                           </button>
-                          <a
-                            href={`#${info.anchor}`}
-                            className={`flex-1 text-[15px] transition-colors hover:text-pine ${
-                              isDone ? "text-ink-soft line-through decoration-line" : "text-ink"
-                            }`}
-                          >
-                            {info.title}
-                          </a>
-                          <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                            {info.category}
-                          </span>
+                          <div className="min-w-0 flex-1">
+                            <a
+                              href={`#${info.anchor}`}
+                              className={`block text-sm transition-colors hover:text-pine ${
+                                isDone
+                                  ? "text-ink-soft line-through decoration-line"
+                                  : "text-ink"
+                              }`}
+                            >
+                              {info.title}
+                            </a>
+                            <p className="mt-0.5 font-mono text-[9px] uppercase tracking-label text-ink-soft">
+                              {info.category}
+                            </p>
+                          </div>
                         </li>
                       );
                     })}
@@ -244,30 +228,31 @@ export default function PlanBoard({
               );
             })}
           </div>
-        </section>
+        </ReportSection>
       )}
 
-      {/* ── Act 06 · Shopping list & checkpoints ─────────────────────── */}
+      {/* ── [06] Shopping list & checkpoints ─────────────────────────── */}
       {(plan.shoppingList.length > 0 || plan.checkpoints.length > 0) && (
-        <section>
-          <ActHeader num="06" title="Shopping list & checkpoints" id="shopping" />
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <ReportSection
+          num="06"
+          titleA="Shopping list"
+          titleB="& checkpoints"
+          id="shopping"
+          blurb="Examples, not endorsements — no affiliate links, ever. Any equivalent with the same active or spec works."
+        >
+          <div className="grid divide-y divide-line lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:divide-x lg:divide-y-0">
             {plan.shoppingList.length > 0 && (
-              <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-                <div className="border-b border-line px-5 py-4 sm:px-6">
-                  <h3 className="font-display text-lg text-ink">What to buy</h3>
-                  <p className="mt-1 text-xs text-ink-soft">
-                    Examples, not endorsements — no affiliate links, ever. Any
-                    equivalent with the same active/spec works.
-                  </p>
-                </div>
+              <div>
+                <p className="border-b border-line px-6 py-4 font-mono text-[10px] uppercase tracking-label text-ink-soft sm:px-8">
+                  What to buy /
+                </p>
                 <ul className="divide-y divide-line">
                   {plan.shoppingList.map((item) => {
                     const info = item.suggestionId ? byId.get(item.suggestionId) : undefined;
                     return (
                       <li
                         key={item.item}
-                        className="grid gap-1 px-5 py-3.5 sm:grid-cols-[1fr_auto] sm:items-baseline sm:gap-4 sm:px-6"
+                        className="grid gap-1 px-6 py-4 sm:grid-cols-[1fr_auto] sm:items-baseline sm:gap-4 sm:px-8"
                       >
                         <div className="min-w-0">
                           <p className="text-[15px] text-ink">
@@ -295,27 +280,29 @@ export default function PlanBoard({
             )}
 
             {plan.checkpoints.length > 0 && (
-              <div className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
-                <h3 className="font-display text-lg text-ink">Checkpoints</h3>
-                <p className="mt-1 text-xs text-ink-soft">
+              <div className="px-6 py-8 sm:px-8">
+                <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
+                  Checkpoints /
+                </p>
+                <p className="mt-3 max-w-sm text-sm leading-relaxed text-ink-soft">
                   Re-photo in the same spot and light as your originals —
                   consistency is what makes progress visible.
                 </p>
-                <ol className="mt-5 space-y-4">
+                <ol className="mt-6 space-y-5">
                   {plan.checkpoints.map((cp) => (
-                    <li key={cp.week} className="flex gap-4">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sage font-mono text-[10px] uppercase text-pine">
-                        w{cp.week}
+                    <li key={cp.week} className="flex items-baseline gap-6">
+                      <span className="w-10 shrink-0 font-mono text-xs text-pine">
+                        [w{cp.week}]
                       </span>
-                      <p className="text-sm leading-relaxed text-ink-soft">{cp.lookFor}</p>
+                      <p className="text-sm leading-relaxed text-ink">{cp.lookFor}</p>
                     </li>
                   ))}
                 </ol>
               </div>
             )}
           </div>
-        </section>
+        </ReportSection>
       )}
-    </div>
+    </>
   );
 }
