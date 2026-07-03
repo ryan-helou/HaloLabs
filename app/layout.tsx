@@ -3,6 +3,7 @@ import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import { ToastProvider } from "@/components/Toast";
+import { appUrl } from "@/lib/env";
 
 const body = Manrope({
   subsets: ["latin"],
@@ -26,9 +27,38 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
+const DESCRIPTION =
+  "An honest mirror, powered by Claude. Get a personalized facial-analysis and " +
+  "transformation plan from your own photos — no surgery, no scores, no rankings.";
+
 export const metadata: Metadata = {
-  title: "HaloLabs",
-  description: "A personal grooming analysis — read-only viewer for analyze-faces results.",
+  metadataBase: new URL(appUrl()),
+  title: {
+    default: "HaloLabs — Improve your looks without surgery",
+    template: "%s · HaloLabs",
+  },
+  description: DESCRIPTION,
+  applicationName: "HaloLabs",
+  keywords: [
+    "facial analysis",
+    "grooming plan",
+    "skincare routine",
+    "personalized grooming",
+    "looksmaxing without surgery",
+  ],
+  openGraph: {
+    type: "website",
+    siteName: "HaloLabs",
+    title: "HaloLabs — Improve your looks without surgery",
+    description: DESCRIPTION,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "HaloLabs — Improve your looks without surgery",
+    description: DESCRIPTION,
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({
