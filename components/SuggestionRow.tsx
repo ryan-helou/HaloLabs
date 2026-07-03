@@ -16,13 +16,16 @@ const RAIL: Record<string, string> = {
 export default function SuggestionRow({
   suggestion,
   anchorId,
+  defaultOpen = false,
 }: {
   suggestion: Suggestion;
   anchorId?: string;
+  /** Start expanded — used for the free-preview reveal on a locked plan. */
+  defaultOpen?: boolean;
 }) {
   const rail = RAIL[strengthFor("impact", suggestion.impact)];
   const quickWin = isQuickWin(suggestion);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const panelId = useId();
 
   // Open automatically when linked to from the matrix or the shortlist so the

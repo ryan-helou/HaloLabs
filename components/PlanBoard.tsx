@@ -35,6 +35,7 @@ export default function PlanBoard({
   advice,
   initialProgress,
   startNum = 4,
+  locked = false,
 }: {
   personId: string;
   plan: Plan;
@@ -42,6 +43,8 @@ export default function PlanBoard({
   initialProgress: Record<string, ProgressEntry>;
   /** First section number; subsequent rendered sections count up from here. */
   startNum?: number;
+  /** Blur the routine/roadmap/shopping specifics behind the paywall. */
+  locked?: boolean;
 }) {
   const [progress, setProgress] =
     useState<Record<string, ProgressEntry>>(initialProgress);
@@ -110,6 +113,8 @@ export default function PlanBoard({
           titleB="routine"
           id="routine"
           blurb="The repeating part of the plan, in the order to apply things. Introduce one new product at a time — give each two weeks before adding the next."
+          lockedContent={locked}
+          lockNote="Your full routine"
         >
           <div className="grid divide-y divide-line md:grid-flow-col md:auto-cols-fr md:divide-x md:divide-y-0">
             {(Object.keys(SLOT_META) as RoutineSlot[]).map((slot) => {
@@ -163,6 +168,8 @@ export default function PlanBoard({
           titleB="roadmap"
           id="roadmap"
           blurb="Work the phases in order — early wins fund the patience the slower changes need. Check things off as they become habits."
+          lockedContent={locked}
+          lockNote="Your 3-phase roadmap"
           rail={
             <div>
               <div className="flex items-baseline justify-between font-mono text-[10px] uppercase tracking-label text-ink-soft">
@@ -252,6 +259,8 @@ export default function PlanBoard({
           titleB="& checkpoints"
           id="shopping"
           blurb="Examples, not endorsements — no affiliate links, ever. Any equivalent with the same active or spec works."
+          lockedContent={locked}
+          lockNote="Your shopping list"
         >
           <div className="grid divide-y divide-line lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:divide-x lg:divide-y-0">
             {plan.shoppingList.length > 0 && (

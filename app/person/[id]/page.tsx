@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { loadPerson } from "@/lib/data";
 import { loadProgress } from "@/lib/progress";
-import { hasPlan } from "@/lib/plan";
+import { hasPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
+import PaywallBar from "@/components/PaywallBar";
 import type { Observations } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +30,30 @@ const OBSERVATION_FIELDS: { key: keyof Observations; label: string }[] = [
   { key: "facialHair", label: "Facial hair" },
 ];
 
-export default async function PersonPage({ params }: { params: { id: string } }) {
+export default async function PersonPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
   const id = decodeURIComponent(params.id);
   const person = await loadPerson(id);
   if (!person) notFound();
+
+  // Entitlement (Phase 1 stub). `unlocked` gates the blur paywall: unlocked
+  // shows the whole plan, locked reveals act [01] observations + one free
+  // suggestion and blurs the rest. `?unlocked=1` previews the paid view while
+  // we tune what's free. Phase 4 replaces this with the Stripe
+  // subscriptionStatus flag on the user record — nothing else here changes.
+  const unlocked = searchParams?.unlocked === "1";
+  const locked = !unlocked;
+
+  // The single suggestion shown in full on a locked plan, chosen deterministically
+  // (skill-flagged freeReveal, else the best impact/effort candidate).
+  const free = pickFreeReveal(person.advice);
+  const freeKey = free ? `${free.category}-${free.index}` : undefined;
+  const totalSuggestions = flattenAdvice(person.advice).length;
 
   const progressStore = await loadProgress();
   const progress = progressStore[id] ?? {};
@@ -69,7 +90,11 @@ export default async function PersonPage({ params }: { params: { id: string } })
   return (
     // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
     // page — the report runs in Qoves-style framed bands, not floating cards.
-    <div className="relative left-1/2 w-screen -translate-x-1/2 -mt-6">
+    <div
+      className={`relative left-1/2 w-screen -translate-x-1/2 -mt-6 ${
+        locked ? "pb-32" : ""
+      }`}
+    >
       <PersonHero person={person} />
 
       {/* Plan cover letter — summary, strengths, expectations (v2 only). */}
@@ -86,11 +111,17 @@ export default async function PersonPage({ params }: { params: { id: string } })
             advice={person.advice}
             initialProgress={progress}
             startNum={1}
+            locked={locked}
           />
         )}
 
         {/* Protocol detail, then the analysis map. */}
-        <AdviceBoard advice={person.advice} startNum={adviceStart} />
+        <AdviceBoard
+          advice={person.advice}
+          startNum={adviceStart}
+          locked={locked}
+          freeKey={freeKey}
+        />
 
         {/* Observations last — the raw material every suggestion is built from. */}
         <ReportSection
@@ -131,6 +162,11 @@ export default async function PersonPage({ params }: { params: { id: string } })
         to someone you trust or a professional. Nothing here is more important
         than that.
       </p>
+
+      {/* Pressure UI — only while locked. The button is stubbed until Stripe. */}
+      {locked && totalSuggestions > 0 && (
+        <PaywallBar unlockedCount={1} totalCount={totalSuggestions} />
+      )}
     </div>
   );
 }
