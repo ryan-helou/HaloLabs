@@ -174,7 +174,7 @@ const ANALYSIS_TOOL = {
       },
       builtFor: { type: "array", items: { type: "string" } },
     },
-    required: ["observations", "advice"],
+    required: ["observations", "advice", "plan", "builtFor"],
   },
 } as const;
 
@@ -371,7 +371,7 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
     });
     const res = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 8000,
+      max_tokens: 12000,
       // Cache the static prefix (tools render first, then system). One breakpoint
       // on the last system block caches tools + system together, so every scan
       // after the first reads that ~3k-token rubric at ~0.1× instead of full
