@@ -7,10 +7,15 @@ import {
   IMAGE_EXTS,
   UPLOAD_IMAGE_EXTS,
   VIDEO_EXTS,
+  contentTypeFor,
   resolvePersonDir,
 } from "@/lib/paths";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { putPhoto, photoKey, storageConfigured } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,6 +64,25 @@ export async function POST(req: Request) {
   }
 
   const id = String(form.get("id") ?? "");
+
+  const files = form.getAll("files").filter((f): f is File => f instanceof File);
+  if (files.length === 0) {
+    return NextResponse.json({ error: "No files received" }, { status: 400 });
+  }
+
+  // ── Cloud path: signed-in account uploading to a DB-backed person. Photos go
+  // to R2 (with a Photo row) when configured, else to local disk in dev. ──────
+  const session = await auth();
+  if (session?.user?.id) {
+    const person = await prisma.person.findFirst({
+      where: { userId: session.user.id, id },
+    });
+    if (person) {
+      return cloudUpload(id, files);
+    }
+  }
+
+  // ── Local path (on-machine dev): profile.json + files on disk. ─────────────
   const dir = resolvePersonDir(id);
   if (!dir) {
     return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
@@ -70,11 +94,6 @@ export async function POST(req: Request) {
       { error: "Complete onboarding first — this profile doesn't exist yet." },
       { status: 404 }
     );
-  }
-
-  const files = form.getAll("files").filter((f): f is File => f instanceof File);
-  if (files.length === 0) {
-    return NextResponse.json({ error: "No files received" }, { status: 400 });
   }
 
   const saved: string[] = [];
@@ -130,6 +149,75 @@ export async function POST(req: Request) {
     }
 
     saved.push(path.basename(target));
+  }
+
+  return NextResponse.json({ saved, errors });
+}
+
+/**
+ * Cloud upload for a DB-backed person. Images go to R2 (with a Photo row) when
+ * configured; otherwise to local disk in dev (no Photo row — the analysis and
+ * /api/photo both fall back to disk). HEIC isn't converted here (no macOS
+ * `sips` in the cloud), so it's rejected with guidance.
+ */
+async function cloudUpload(personId: string, files: File[]) {
+  const saved: string[] = [];
+  const errors: string[] = [];
+  const cloud = storageConfigured();
+  const dir = resolvePersonDir(personId);
+
+  for (const file of files) {
+    const ext = path.extname(file.name).toLowerCase();
+    const isImage = IMAGE_EXTS.has(ext); // jpg/png/webp only in the cloud
+    const isVideo = VIDEO_EXTS.has(ext);
+
+    if (ext === ".heic" || ext === ".heif") {
+      errors.push(`${file.name}: please upload JPG or PNG (HEIC isn't supported online)`);
+      continue;
+    }
+    if (!isImage && !isVideo) {
+      errors.push(`${file.name}: unsupported type (photos: jpg/png/webp, video: mp4/mov/webm)`);
+      continue;
+    }
+    if (file.size > (isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
+      errors.push(`${file.name}: too large`);
+      continue;
+    }
+    // Videos can't be analyzed server-side yet — accept images only in cloud.
+    if (isVideo) {
+      errors.push(`${file.name}: video isn't analyzed online yet — add photos instead`);
+      continue;
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const name = safeName(file.name);
+    const contentType = contentTypeFor(ext);
+
+    try {
+      if (cloud) {
+        const key = photoKey(personId, `${Date.now()}-${name}`);
+        await putPhoto(key, buffer, contentType);
+        await prisma.photo.create({
+          data: {
+            personId,
+            r2Key: key,
+            originalName: file.name.slice(0, 200),
+            contentType,
+            sizeBytes: buffer.byteLength,
+          },
+        });
+        saved.push(name);
+      } else if (dir) {
+        await fs.mkdir(dir, { recursive: true });
+        const target = await uniquePath(dir, name);
+        await fs.writeFile(target, buffer);
+        saved.push(path.basename(target));
+      } else {
+        errors.push(`${file.name}: no storage available`);
+      }
+    } catch {
+      errors.push(`${file.name}: upload failed`);
+    }
   }
 
   return NextResponse.json({ saved, errors });

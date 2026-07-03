@@ -32,6 +32,7 @@ model User {
   sessions Session[]
   people   Person[]
   jobs     AnalysisJob[]
+  progress Progress[]
 }
 
 model Account {
@@ -78,6 +79,9 @@ model Person {
   displayName String
   // Quiz answers / preferences ("builtFor" in the v2 results format)
   builtFor    Json?
+  // Full onboarding answers (OnboardingProfile) the analysis reads — the cloud
+  // equivalent of profile.json.
+  profile     Json?
   createdAt   DateTime @default(now())
 
   user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -86,6 +90,21 @@ model Person {
   results AnalysisResult[]
 
   @@index([userId])
+}
+
+// Suggestion check-offs, per user + person + suggestion. personId is a plain
+// string (not an FK) so progress works for both DB-backed and local people.
+model Progress {
+  userId       String
+  personId     String
+  suggestionId String
+  done         Boolean   @default(false)
+  doneAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, personId, suggestionId])
+  @@index([userId, personId])
 }
 
 model Photo {

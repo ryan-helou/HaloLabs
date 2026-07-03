@@ -1,12 +1,13 @@
 "use client";
 
+import { useState } from "react";
+
 /**
  * The pressure UI for a locked plan: a fixed bar pinned to the bottom of the
  * viewport with a "X of Y unlocked" counter and the upgrade call to action.
  *
- * Phase 1 — the button is a stub. It logs intent so we can tune what's free vs.
- * locked before any payment exists. Phase 4 swaps the onClick for Stripe
- * Checkout; nothing else about this component changes.
+ * The button opens Stripe Checkout for the subscription; on success the webhook
+ * flips the account's subscriptionStatus and the blur lifts on return.
  */
 export default function PaywallBar({
   unlockedCount,
@@ -20,15 +21,31 @@ export default function PaywallBar({
   price?: string;
 }) {
   const pct = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function onUnlock() {
-    // Stubbed until Stripe Checkout lands (Phase 4). Logging intent lets us
-    // wire analytics / verify the button works during Phase 1 demos.
-    console.log("[paywall] unlock intent", {
-      price,
-      unlockedCount,
-      totalCount,
-    });
+  async function onUnlock() {
+    setLoading(true);
+    setError(null);
+    try {
+      const returnTo =
+        typeof window !== "undefined" ? window.location.pathname : "/profiles";
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnTo }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      setError(data.error || "Couldn't start checkout. Please try again.");
+    } catch {
+      setError("Couldn't start checkout. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -50,15 +67,23 @@ export default function PaywallBar({
               style={{ width: `${pct}%` }}
             />
           </div>
+          {error && (
+            <p className="mt-1.5 text-xs text-clay" role="alert">
+              {error}
+            </p>
+          )}
         </div>
 
         <button
           type="button"
           onClick={onUnlock}
-          className="shrink-0 rounded-full bg-pine px-6 py-3 text-center text-sm font-medium text-paper transition-colors hover:bg-pine-deep"
+          disabled={loading}
+          className="shrink-0 rounded-full bg-pine px-6 py-3 text-center text-sm font-medium text-paper transition-colors hover:bg-pine-deep disabled:opacity-60"
         >
-          Unlock full plan
-          <span className="ml-2 font-mono text-xs text-paper/70">{price}</span>
+          {loading ? "Opening checkout…" : "Unlock full plan"}
+          {!loading && (
+            <span className="ml-2 font-mono text-xs text-paper/70">{price}</span>
+          )}
         </button>
       </div>
     </div>

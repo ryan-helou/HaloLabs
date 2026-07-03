@@ -8,6 +8,8 @@ import type {
   OnboardingProfile,
 } from "@/lib/types";
 import { AVOID_OPTIONS, FOCUS_AREAS } from "@/lib/types";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,22 @@ export async function POST(req: Request) {
     notes: clip(body.notes),
   };
 
+  // ── Cloud path: a signed-in account gets a DB-backed Person. Person.id is a
+  // cuid (globally unique across users), and the onboarding answers are stored
+  // as Person.profile for the hosted analysis to read. ──────────────────────
+  const session = await auth();
+  if (session?.user?.id) {
+    const person = await prisma.person.create({
+      data: {
+        userId: session.user.id,
+        displayName,
+        profile: profile as unknown as object,
+      },
+    });
+    return NextResponse.json({ id: person.id, updated: false });
+  }
+
+  // ── Local path (on-machine dev): profile.json on disk. ─────────────────────
   const profilePath = path.join(dir, "profile.json");
   const existed = await fs
     .access(profilePath)

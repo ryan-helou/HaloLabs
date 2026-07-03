@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { loadPerson } from "@/lib/data";
-import { loadProgress } from "@/lib/progress";
+import { loadProgressForPerson } from "@/lib/progress";
 import { hasPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import { isUnlocked } from "@/lib/entitlement";
 import PersonHero from "@/components/PersonHero";
@@ -58,8 +58,7 @@ export default async function PersonPage({
   const freeKey = free ? `${free.category}-${free.index}` : undefined;
   const totalSuggestions = flattenAdvice(person.advice).length;
 
-  const progressStore = await loadProgress();
-  const progress = progressStore[id] ?? {};
+  const progress = await loadProgressForPerson(id);
   const extras = person.observations?.extras ?? [];
 
   const observationRows: { label: string; text: string }[] = [
