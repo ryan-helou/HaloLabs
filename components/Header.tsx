@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
+import SignOutButton from "@/components/SignOutButton";
 
 const NAV = [
   { label: "Why HaloLabs", href: "/#why-halolabs" },
@@ -6,7 +8,9 @@ const NAV = [
   { label: "FAQ", href: "/#faq" },
 ];
 
-export default function Header() {
+export default async function Header() {
+  const session = await auth();
+  const signedIn = !!session?.user;
   return (
     <div className="sticky top-4 z-40 px-4">
       <header className="mx-auto flex max-w-5xl items-center justify-between rounded-full border border-line/80 bg-surface/70 py-2.5 pl-3 pr-3 shadow-float backdrop-blur-xl sm:pl-4 sm:pr-2.5">
@@ -35,18 +39,38 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-1.5">
-          <Link
-            href="/profiles"
-            className="hidden rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink sm:inline"
-          >
-            Profiles
-          </Link>
-          <Link
-            href="/start"
-            className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-pine-deep"
-          >
-            Start my plan
-          </Link>
+          {signedIn ? (
+            <>
+              <Link
+                href="/profiles"
+                className="hidden rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink sm:inline"
+              >
+                Profiles
+              </Link>
+              <SignOutButton className="hidden rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink sm:inline" />
+              <Link
+                href="/start"
+                className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-pine-deep"
+              >
+                Start my plan
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="hidden rounded-full px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:text-ink sm:inline"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-pine-deep"
+              >
+                Start my plan
+              </Link>
+            </>
+          )}
         </div>
       </header>
     </div>

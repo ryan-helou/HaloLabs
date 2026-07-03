@@ -1,23 +1,14 @@
-"use client";
+import { auth } from "@/lib/auth";
 
-import { useEffect, useState } from "react";
+/** Shows the signed-in account (email or name) from the real session. */
+export default async function SignedInAs() {
+  const session = await auth();
+  const who = session?.user?.name || session?.user?.email;
 
-/** Reads the placeholder username stashed at sign-in (no real auth yet). */
-export default function SignedInAs() {
-  const [name, setName] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      setName(window.localStorage.getItem("halolabs_user"));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  if (!name) return <span className="eyebrow">Your lab</span>;
+  if (!who) return <span className="eyebrow">Your lab</span>;
   return (
     <span className="eyebrow">
-      Signed in as <span className="text-ink">{name}</span>
+      Signed in as <span className="text-ink">{who}</span>
     </span>
   );
 }
