@@ -9,6 +9,7 @@ import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
 import HaloGlance from "@/components/HaloGlance";
+import LockedScanHook from "@/components/LockedScanHook";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import PaywallBar from "@/components/PaywallBar";
@@ -101,12 +102,16 @@ export default async function PersonPage({
       <PersonHero person={person} />
 
       <ProgressProvider personId={person.id} initial={progress}>
-        {/* The digest — the one thing to read: what to start with, where the
-            plan focuses, what already works. Everything else sits collapsed
-            below it. On a locked plan we keep the teaser cover letter instead,
-            so the paywall still reveals only one move in full. */}
-        {planReady && !locked ? (
-          <HaloGlance person={person} />
+        {/* Unlocked: the digest — what to start with, where the plan focuses,
+            what already works. Locked: the free-scan hook — proof it saw them
+            (strengths), where their leverage is, one real move free, and the
+            honest "the gains stack" sell into the paywall. */}
+        {planReady ? (
+          locked ? (
+            <LockedScanHook person={person} />
+          ) : (
+            <HaloGlance person={person} />
+          )
         ) : (
           <PlanOverview person={person} />
         )}
