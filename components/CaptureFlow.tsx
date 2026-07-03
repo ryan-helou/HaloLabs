@@ -383,19 +383,13 @@ export default function CaptureFlow() {
                 {Math.floor(analysis.elapsedSec / 60)}m {analysis.elapsedSec % 60}s elapsed
               </p>
             )}
-            <ol className="mx-auto mt-8 max-w-sm space-y-2 text-left text-sm text-ink-soft">
-              {[
-                "Reading your onboarding answers",
-                "Viewing each photo in detail",
-                "Writing observations & suggestions",
-                "Assembling your routine and plan",
-              ].map((s, i) => (
-                <li key={s} className="flex items-baseline gap-3">
-                  <span className="font-mono text-xs text-pine">[{i + 1}]</span>
-                  {s}
-                </li>
-              ))}
-            </ol>
+            <WaitSteps
+              elapsedSec={analysis.phase === "running" ? analysis.elapsedSec : 0}
+            />
+            <p className="mx-auto mt-8 max-w-sm text-xs leading-relaxed text-ink-soft">
+              You can leave this page — the analysis keeps running and your plan
+              will be on your profile when it&apos;s done.
+            </p>
           </>
         )}
       </div>
@@ -686,6 +680,65 @@ export default function CaptureFlow() {
         </p>
       )}
     </div>
+  );
+}
+
+// The pipeline the worker actually runs, in order, with rough cumulative time
+// thresholds. Steps light up as time passes to convey motion — but the final
+// step only ever pulses (never checks off), so nothing claims "done" before the
+// real done state flips the whole screen. Honest, not fabricated precision.
+const WAIT_STEPS: { label: string; startsAt: number }[] = [
+  { label: "Reading your onboarding answers", startsAt: 0 },
+  { label: "Viewing each photo in detail", startsAt: 6 },
+  { label: "Writing observations & suggestions", startsAt: 40 },
+  { label: "Assembling your routine and plan", startsAt: 90 },
+];
+
+function WaitSteps({ elapsedSec }: { elapsedSec: number }) {
+  // The furthest step whose start time has passed is "active"; earlier ones are
+  // "done". The last step never advances past active.
+  let active = 0;
+  for (let i = 0; i < WAIT_STEPS.length; i++) {
+    if (elapsedSec >= WAIT_STEPS[i].startsAt) active = i;
+  }
+  return (
+    <ol className="mx-auto mt-8 max-w-sm space-y-2.5 text-left">
+      {WAIT_STEPS.map((s, i) => {
+        const done = i < active;
+        const isActive = i === active;
+        return (
+          <li key={s.label} className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] transition-colors ${
+                done
+                  ? "border-pine bg-pine text-paper"
+                  : isActive
+                    ? "border-pine text-pine"
+                    : "border-line text-ink-soft"
+              }`}
+            >
+              {done ? (
+                <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              ) : isActive ? (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-pine" />
+              ) : (
+                i + 1
+              )}
+            </span>
+            <span
+              className={`text-sm transition-colors ${
+                done ? "text-ink" : isActive ? "text-ink" : "text-ink-soft"
+              }`}
+            >
+              {s.label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
