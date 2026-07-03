@@ -22,7 +22,7 @@ export default function PlanOverview({ person }: { person: Person }) {
           <h2 className="mt-6 font-display text-4xl font-medium leading-[1.06] tracking-tight sm:text-5xl">
             Your personalized
             <br />
-            <span className="text-paper/50">plan</span>
+            <span className="text-paper/70">plan</span>
           </h2>
 
           <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-paper/80">
