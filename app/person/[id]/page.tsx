@@ -7,9 +7,11 @@ import { hasPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
+import HaloGlance from "@/components/HaloGlance";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import PaywallBar from "@/components/PaywallBar";
+import { ProgressProvider } from "@/components/ProgressProvider";
 import type { Observations } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -97,62 +99,72 @@ export default async function PersonPage({
     >
       <PersonHero person={person} />
 
-      {/* Plan cover letter — summary, strengths, expectations (v2 only). */}
-      <PlanOverview person={person} />
-
-      {/* The report body: numbered acts stacked as one framed document.
-          Order leads with what to do, ends with the raw observations. */}
-      <div className="border-b border-line">
-        {/* Routine + roadmap + shopping — the execution pathway leads (v2). */}
-        {planReady && plan && (
-          <PlanBoard
-            personId={person.id}
-            plan={plan}
-            advice={person.advice}
-            initialProgress={progress}
-            startNum={1}
-            locked={locked}
-          />
+      <ProgressProvider personId={person.id} initial={progress}>
+        {/* The digest — the one thing to read: what to start with, where the
+            plan focuses, what already works. Everything else sits collapsed
+            below it. On a locked plan we keep the teaser cover letter instead,
+            so the paywall still reveals only one move in full. */}
+        {planReady && !locked ? (
+          <HaloGlance person={person} />
+        ) : (
+          <PlanOverview person={person} />
         )}
 
-        {/* Protocol detail, then the analysis map. */}
-        <AdviceBoard
-          advice={person.advice}
-          startNum={adviceStart}
-          locked={locked}
-          freeKey={freeKey}
-        />
+        {/* The report body: numbered acts stacked as one framed document.
+            Routine + roadmap stay open as the daily driver; the deeper
+            reference (shopping, protocol, analysis, photos) collapses. */}
+        <div className="border-b border-line">
+          {planReady && plan && (
+            <PlanBoard
+              plan={plan}
+              advice={person.advice}
+              startNum={1}
+              locked={locked}
+            />
+          )}
 
-        {/* Observations last — the raw material every suggestion is built from. */}
-        <ReportSection
-          num={obsNum}
-          titleA="What the"
-          titleB="photos show"
-          blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion above was built from."
-          rail={
-            <Link
-              href={`/start/photos?id=${encodeURIComponent(person.id)}`}
-              className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
-            >
-              Add photos / re-analyze →
-            </Link>
-          }
-        >
-          <dl className="divide-y divide-line">
-            {observationRows.map(({ label, text }) => (
-              <div
-                key={label}
-                className="grid gap-1 px-6 py-5 sm:grid-cols-[150px_1fr] sm:gap-8 sm:px-8"
+          {/* Protocol detail, then the analysis map. */}
+          <AdviceBoard
+            advice={person.advice}
+            startNum={adviceStart}
+            locked={locked}
+            freeKey={freeKey}
+          />
+
+          {/* Observations last — the raw material every suggestion is built from. */}
+          <ReportSection
+            num={obsNum}
+            titleA="What the"
+            titleB="photos show"
+            blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion above was built from."
+            collapsible
+            defaultOpen={false}
+            collapsedHint="Neutral notes on your hair, skin, face shape, and more — the raw material behind every suggestion. "
+            rail={
+              <Link
+                href={`/start/photos?id=${encodeURIComponent(person.id)}`}
+                className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
               >
-                <dt className="eyebrow pt-0.5">{label}</dt>
-                <dd className="max-w-prose text-[15px] leading-relaxed text-ink">
-                  {text || <span className="text-ink-soft">Not noted.</span>}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </ReportSection>
-      </div>
+                Add photos / re-analyze →
+              </Link>
+            }
+          >
+            <dl className="divide-y divide-line">
+              {observationRows.map(({ label, text }) => (
+                <div
+                  key={label}
+                  className="grid gap-1 px-6 py-5 sm:grid-cols-[150px_1fr] sm:gap-8 sm:px-8"
+                >
+                  <dt className="eyebrow pt-0.5">{label}</dt>
+                  <dd className="max-w-prose text-[15px] leading-relaxed text-ink">
+                    {text || <span className="text-ink-soft">Not noted.</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </ReportSection>
+        </div>
+      </ProgressProvider>
 
       {/* Wellbeing note — quiet, always present. */}
       <p className="mx-auto max-w-[1300px] px-6 py-10 text-xs leading-relaxed text-ink-soft sm:px-10">

@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { Advice } from "@/lib/types";
 import { ADVICE_CATEGORIES } from "@/lib/types";
 import { CATEGORY_META } from "@/lib/categories";
-import { isQuickWin } from "@/lib/badges";
 import AdviceSection from "./AdviceSection";
 import AdviceMatrix, { type MatrixItem } from "./AdviceMatrix";
 import Legend from "./Legend";
@@ -48,17 +47,10 @@ export default function AdviceBoard({
     ),
   }));
   const allItems = catItems.flatMap((c) => c.items);
-  const quickWins = allItems.filter((x) => isQuickWin(x.s));
   const areas = catItems.filter((c) => c.items.length > 0).length;
 
   // The one suggestion shown in full on a locked plan (chosen by the page).
   const freeItem = freeKey ? allItems.find((x) => x.id === freeKey) : undefined;
-
-  const stats = [
-    { value: allItems.length, label: allItems.length === 1 ? "idea" : "ideas" },
-    { value: quickWins.length, label: "quick wins", accent: true },
-    { value: areas, label: areas === 1 ? "focus area" : "focus areas" },
-  ];
 
   return (
     <>
@@ -70,6 +62,13 @@ export default function AdviceBoard({
         id="protocol"
         blurb="Options, not fixes. Each move says why it's for you, how to do it, and roughly what it costs — the tags describe the suggestion, never you."
         rail={<Legend />}
+        collapsible={!locked}
+        defaultOpen={false}
+        collapsedHint={`The full detail behind all ${allItems.length} ${
+          allItems.length === 1 ? "move" : "moves"
+        } — why it's for you, how to do it, and what to use, across ${areas} ${
+          areas === 1 ? "area" : "areas"
+        }. `}
       >
         {/* Free preview — the single suggestion revealed on a locked plan,
             shown in full and expanded so it lands as the reward. */}
@@ -105,25 +104,12 @@ export default function AdviceBoard({
         blurb="The same suggestions as a map — how much each tends to help against what it takes to do. The counts describe the plan, never you."
         lockedContent={locked}
         lockNote="Your full analysis map"
+        collapsible={!locked}
+        defaultOpen={false}
+        collapsedHint={`An impact-vs-effort map of all ${allItems.length} ${
+          allItems.length === 1 ? "move" : "moves"
+        } — see at a glance which give the most for the least. `}
       >
-        {/* Neutral stat strip — counts only; never a rating of the person. */}
-        <dl className="grid grid-cols-3 divide-x divide-line border-b border-line">
-          {stats.map((s) => (
-            <div key={s.label} className="px-6 py-6 sm:px-8 sm:py-7">
-              <dd
-                className={`font-display text-4xl font-medium leading-none sm:text-5xl ${
-                  s.accent && s.value > 0 ? "text-clay" : "text-ink"
-                }`}
-              >
-                {s.value}
-              </dd>
-              <dt className="mt-2.5 font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                {s.label}
-              </dt>
-            </div>
-          ))}
-        </dl>
-
         {allItems.length > 0 && (
           <div className="p-5 sm:p-8">
             <AdviceMatrix items={allItems} />
@@ -136,44 +122,6 @@ export default function AdviceBoard({
   function renderProtocolBody() {
     return (
       <div className="space-y-10 p-5 sm:p-8">
-          {/* Start here — the ordered shortlist of easiest high-value moves. */}
-          {quickWins.length > 0 && (
-            <div className="border border-clay/30 bg-clay-soft/40 p-5 sm:p-7">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="font-mono text-[10px] uppercase tracking-label text-clay">
-                  Start here /
-                </p>
-                <span className="font-mono text-[11px] uppercase tracking-label text-clay">
-                  {quickWins.length} quick {quickWins.length === 1 ? "win" : "wins"}
-                </span>
-              </div>
-              <ol className="mt-5 divide-y divide-clay/20">
-                {quickWins.map((q, i) => (
-                  <li key={q.id}>
-                    <a
-                      href={`#sug-${q.id}`}
-                      className="group flex items-baseline gap-6 py-3 transition-colors hover:text-pine-deep"
-                    >
-                      <span className="w-7 shrink-0 font-mono text-xs text-clay">
-                        [{i + 1}]
-                      </span>
-                      <span className="flex-1 text-[15px] text-ink">{q.s.title}</span>
-                      <span className="hidden font-mono text-[10px] uppercase tracking-label text-ink-soft sm:inline">
-                        {CATEGORY_META[q.cat].label}
-                      </span>
-                      <span
-                        aria-hidden
-                        className="text-ink-soft transition-transform group-hover:translate-x-0.5"
-                      >
-                        →
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
           <div className="flex justify-end">
             <div
               role="group"
