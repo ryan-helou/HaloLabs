@@ -63,6 +63,11 @@ export async function POST(req: Request) {
     metadata: { userId: user.id },
     subscription_data: { metadata: { userId: user.id } },
     allow_promotion_codes: true,
+    // A 100%-off promo (the friends code) makes the total $0; without this,
+    // subscription mode would still force a card. "if_required" lets a fully
+    // discounted checkout complete with no payment method, while normal $9.99
+    // signups still collect one.
+    payment_method_collection: "if_required",
   });
 
   return NextResponse.json({ url: checkout.url });
