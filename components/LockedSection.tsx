@@ -1,8 +1,16 @@
+"use client";
+
+import { useCheckout } from "./useCheckout";
+
 /**
  * Wraps the content column of a locked report act. The act's header, numeral,
  * and blurb (the ReportSection left rail) stay razor sharp — only the specifics
  * here get a CSS blur, so the shape of the plan shows through but nothing is
  * legible or interactive until the plan is unlocked.
+ *
+ * The whole blurred area is one big unlock affordance: clicking (or keyboard-
+ * activating) anywhere on it starts Stripe Checkout, same as the PaywallBar
+ * and UnlockCard buttons.
  *
  * A future refinement can blur per field (product names, how[] steps, timelines)
  * while keeping sub-headers sharp; for now the whole column blurs behind a light
@@ -16,8 +24,24 @@ export default function LockedSection({
   /** Short line shown on the lock chip over the blurred content. */
   note?: string;
 }) {
+  const { startCheckout, loading, error } = useCheckout();
+
   return (
-    <div className="relative isolate">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label="Unlock the full plan"
+      onClick={() => {
+        if (!loading) startCheckout();
+      }}
+      onKeyDown={(e) => {
+        if ((e.key === "Enter" || e.key === " ") && !loading) {
+          e.preventDefault();
+          startCheckout();
+        }
+      }}
+      className="group relative isolate cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pine"
+    >
       {/* The real content, blurred and inert. aria-hidden so screen readers
           skip the scrambled copy — the lock chip carries the message. */}
       <div
@@ -27,10 +51,10 @@ export default function LockedSection({
         {children}
       </div>
 
-      {/* Light scrim + centered lock chip. pointer-events-none so it never
-          traps clicks; the sticky paywall bar is the real call to action. */}
+      {/* Light scrim + centered lock chip. pointer-events-none so clicks fall
+          through to the wrapper, which opens checkout. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-paper/25">
-        <div className="flex items-center gap-2 rounded-full border border-line bg-paper/90 px-4 py-2 shadow-float backdrop-blur-sm">
+        <div className="flex items-center gap-2 rounded-full border border-line bg-paper/90 px-4 py-2 shadow-float backdrop-blur-sm transition-colors group-hover:border-pine">
           <svg
             viewBox="0 0 24 24"
             className="h-3.5 w-3.5 text-pine"
@@ -45,7 +69,11 @@ export default function LockedSection({
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
           <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-            {note}
+            {loading
+              ? "Opening checkout…"
+              : error
+                ? "Couldn't open checkout — tap to retry"
+                : note}
           </span>
         </div>
       </div>
