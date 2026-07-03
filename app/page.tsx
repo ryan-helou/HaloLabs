@@ -423,23 +423,44 @@ export default function HomePage() {
       {/* ------------------------------------- 6 · You will learn */}
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-[1500px] px-6 sm:px-10">
-          <h2 className="text-center font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
-            What you&apos;ll <span className="text-pine">learn</span>
-          </h2>
-          <div className="mx-auto mt-12 max-w-2xl space-y-4">
-            {LEARN_ITEMS.map((item, i) => (
-              <div
+          <div className="mx-auto max-w-2xl text-center">
+            <Eyebrow>The deliverable</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-medium tracking-tight text-ink sm:text-5xl">
+              What you&apos;ll <span className="text-pine">learn</span>
+            </h2>
+          </div>
+
+          {/* Bento: a lead feature card, then the supporting reads around it. */}
+          <div className="mt-12 grid gap-4 lg:grid-cols-2">
+            {/* Lead card — dark, emphasized. */}
+            <article className="flex flex-col justify-between rounded-2xl bg-gradient-to-br from-pine-deep to-pine p-8 text-paper shadow-float sm:p-10 lg:col-span-2 lg:min-h-[220px]">
+              <span className="font-mono text-xs text-paper/60">01</span>
+              <div className="mt-6 max-w-2xl">
+                <h3 className="font-display text-2xl font-medium tracking-tight sm:text-3xl">
+                  {LEARN_ITEMS[0].title}
+                </h3>
+                <p className="mt-3 text-[15px] leading-relaxed text-paper/80">
+                  {LEARN_ITEMS[0].body}
+                </p>
+              </div>
+            </article>
+
+            {/* Supporting reads — 2×2. */}
+            {LEARN_ITEMS.slice(1).map((item, i) => (
+              <article
                 key={item.title}
-                className="flex items-start gap-5 rounded-xl border border-line bg-surface p-5 shadow-card"
+                className="flex items-start gap-5 rounded-2xl border border-line bg-surface p-6 shadow-card transition-colors hover:border-pine/40 sm:p-7"
               >
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sage font-mono text-xs text-pine">
-                  {String(i + 1).padStart(2, "0")}
+                  {String(i + 2).padStart(2, "0")}
                 </span>
                 <div>
-                  <h3 className="text-[15px] font-semibold text-ink">{item.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{item.body}</p>
+                  <h3 className="text-base font-semibold text-ink">{item.title}</h3>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
+                    {item.body}
+                  </p>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         </div>
