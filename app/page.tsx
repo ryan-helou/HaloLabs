@@ -182,10 +182,10 @@ export default function HomePage() {
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
-                href="#login"
+                href="/start"
                 className="rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep"
               >
-                Start my plan
+                Get my free scan
               </a>
               <a
                 href="#how-it-works"
@@ -194,6 +194,9 @@ export default function HomePage() {
                 How it works
               </a>
             </div>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-label text-pine-deep/70">
+              Free scan · strengths first · no card needed
+            </p>
           </div>
 
           <div className="relative hidden self-end lg:block">
