@@ -50,7 +50,9 @@ export default function LoginForm() {
         </button>
       </div>
       <p className="mt-2 text-xs text-ink-soft">
-        No password yet — accounts are coming. Your username stays on this device.
+        Free, and it runs on your machine — your photos never upload, and your
+        plan is ready in minutes, not weeks. No password yet; accounts are
+        coming.
       </p>
     </form>
   );

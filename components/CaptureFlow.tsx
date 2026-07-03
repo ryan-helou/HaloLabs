@@ -133,6 +133,7 @@ export default function CaptureFlow() {
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisState>({ phase: "idle" });
+  const [qualityNotes, setQualityNotes] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [webcamCapable, setWebcamCapable] = useState(false);
@@ -192,11 +193,57 @@ export default function CaptureFlow() {
     };
   }, [analysis.phase, id]);
 
+  // Advisory-only: catch obviously hard-to-read photos (too small, too dark or
+  // blown out) at capture time, so a weak photo is a fixable nudge here rather
+  // than a disappointing plan later. We never block on it — the user decides.
+  async function inspectImages(list: File[]): Promise<string[]> {
+    const notes: string[] = [];
+    for (const f of list) {
+      const isImage = f.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(f.name);
+      const isHeic = /heic|heif/i.test(`${f.type} ${f.name}`);
+      if (!isImage || isHeic) continue; // HEIC can't be decoded to canvas here
+      const note = await new Promise<string>((resolve) => {
+        const url = URL.createObjectURL(f);
+        const img = new Image();
+        img.onload = () => {
+          const issues: string[] = [];
+          if (Math.min(img.naturalWidth, img.naturalHeight) < 600)
+            issues.push("a little low-res");
+          const s = 64;
+          const canvas = document.createElement("canvas");
+          canvas.width = s;
+          canvas.height = s;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, s, s);
+            const { data } = ctx.getImageData(0, 0, s, s);
+            let sum = 0;
+            for (let i = 0; i < data.length; i += 4)
+              sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            const mean = sum / (data.length / 4);
+            if (mean < 55) issues.push("looks dark — try facing a window");
+            else if (mean > 232) issues.push("looks a bit blown out");
+          }
+          URL.revokeObjectURL(url);
+          resolve(issues.length ? `${f.name} — ${issues.join(", ")}` : "");
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve("");
+        };
+        img.src = url;
+      });
+      if (note) notes.push(note);
+    }
+    return notes;
+  }
+
   async function handleFiles(files: FileList | File[]) {
     const list = Array.from(files);
     if (!list.length) return;
     setUploading(true);
     setUploadErrors([]);
+    inspectImages(list).then(setQualityNotes);
     const form = new FormData();
     form.set("id", id);
     for (const f of list) form.append("files", f);
@@ -514,6 +561,28 @@ export default function CaptureFlow() {
               {err}
             </p>
           ))}
+        </div>
+      )}
+
+      {/* Advisory quality nudge — a photo problem is fixable here, not a
+          disappointing plan later. Never blocks; the choice stays the user's. */}
+      {qualityNotes.length > 0 && (
+        <div className="mt-3 rounded-xl border border-line bg-sage/40 px-4 py-3">
+          <p className="text-sm font-medium text-ink">
+            A couple of these might be hard to read clearly — worth a retake if
+            it&apos;s easy:
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {qualityNotes.map((n) => (
+              <li key={n} className="text-sm text-ink-soft">
+                {n}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-soft">
+            Sharper, well-lit photos make for a sharper plan — but these are
+            kept, and you can analyze as-is whenever you&apos;re ready.
+          </p>
         </div>
       )}
 

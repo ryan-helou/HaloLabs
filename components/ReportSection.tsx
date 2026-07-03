@@ -36,7 +36,7 @@ export default function ReportSection({
             <h2 className="mt-5 font-display text-3xl font-medium leading-[1.08] tracking-tight text-ink sm:text-4xl">
               {titleA}
               <br />
-              <span className="text-pine/50">{titleB}</span>
+              <span className="text-pine">{titleB}</span>
             </h2>
             {blurb && (
               <p className="mt-5 max-w-sm text-[15px] leading-relaxed text-ink-soft">

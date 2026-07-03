@@ -10,8 +10,22 @@ import AdviceMatrix, { type MatrixItem } from "./AdviceMatrix";
 import Legend from "./Legend";
 import ReportSection from "./ReportSection";
 
-export default function AdviceBoard({ advice }: { advice: Advice }) {
+/**
+ * Acts of the report body. Protocol (the actionable per-suggestion detail with
+ * why/how/products) leads; the analysis map is a supporting recap that follows.
+ * `startNum` lets the page number these after the plan sections above them.
+ */
+export default function AdviceBoard({
+  advice,
+  startNum = 2,
+}: {
+  advice: Advice;
+  startNum?: number;
+}) {
   const [sortByImpact, setSortByImpact] = useState(true);
+  const pad = (x: number) => String(x).padStart(2, "0");
+  const protocolNum = pad(startNum);
+  const analysisNum = pad(startNum + 1);
 
   // Assign each suggestion a stable id so the matrix, the shortlist, and the
   // cards all refer to the same anchor regardless of display sort order.
@@ -33,46 +47,13 @@ export default function AdviceBoard({ advice }: { advice: Advice }) {
 
   return (
     <>
-      {/* ── [02] Analysis ─────────────────────────────────────────────── */}
+      {/* ── Protocol — the actionable detail leads ────────────────────── */}
       <ReportSection
-        num="02"
-        titleA="Your facial"
-        titleB="analysis"
-        id="analysis"
-        blurb="Every suggestion mapped by how much it tends to help against what it takes to do. The counts describe the plan — never you."
-      >
-        {/* Neutral stat strip — counts only; never a rating of the person. */}
-        <dl className="grid grid-cols-3 divide-x divide-line border-b border-line">
-          {stats.map((s) => (
-            <div key={s.label} className="px-6 py-6 sm:px-8 sm:py-7">
-              <dd
-                className={`font-display text-4xl font-medium leading-none sm:text-5xl ${
-                  s.accent && s.value > 0 ? "text-clay" : "text-ink"
-                }`}
-              >
-                {s.value}
-              </dd>
-              <dt className="mt-2.5 font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                {s.label}
-              </dt>
-            </div>
-          ))}
-        </dl>
-
-        {allItems.length > 0 && (
-          <div className="p-5 sm:p-8">
-            <AdviceMatrix items={allItems} />
-          </div>
-        )}
-      </ReportSection>
-
-      {/* ── [03] Protocol ─────────────────────────────────────────────── */}
-      <ReportSection
-        num="03"
+        num={protocolNum}
         titleA="Your improvement"
         titleB="protocol"
         id="protocol"
-        blurb="Options, not fixes. Each move is tagged by how much it tends to help and what it takes to do — the tags describe the suggestion, never you."
+        blurb="Options, not fixes. Each move says why it's for you, how to do it, and roughly what it costs — the tags describe the suggestion, never you."
         rail={<Legend />}
       >
         <div className="space-y-10 p-5 sm:p-8">
@@ -156,6 +137,39 @@ export default function AdviceBoard({ advice }: { advice: Advice }) {
             ))}
           </div>
         </div>
+      </ReportSection>
+
+      {/* ── Analysis — the map/recap of everything above ──────────────── */}
+      <ReportSection
+        num={analysisNum}
+        titleA="Your facial"
+        titleB="analysis"
+        id="analysis"
+        blurb="The same suggestions as a map — how much each tends to help against what it takes to do. The counts describe the plan, never you."
+      >
+        {/* Neutral stat strip — counts only; never a rating of the person. */}
+        <dl className="grid grid-cols-3 divide-x divide-line border-b border-line">
+          {stats.map((s) => (
+            <div key={s.label} className="px-6 py-6 sm:px-8 sm:py-7">
+              <dd
+                className={`font-display text-4xl font-medium leading-none sm:text-5xl ${
+                  s.accent && s.value > 0 ? "text-clay" : "text-ink"
+                }`}
+              >
+                {s.value}
+              </dd>
+              <dt className="mt-2.5 font-mono text-[10px] uppercase tracking-label text-ink-soft">
+                {s.label}
+              </dt>
+            </div>
+          ))}
+        </dl>
+
+        {allItems.length > 0 && (
+          <div className="p-5 sm:p-8">
+            <AdviceMatrix items={allItems} />
+          </div>
+        )}
       </ReportSection>
     </>
   );

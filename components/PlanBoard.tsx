@@ -34,11 +34,14 @@ export default function PlanBoard({
   plan,
   advice,
   initialProgress,
+  startNum = 4,
 }: {
   personId: string;
   plan: Plan;
   advice: Advice;
   initialProgress: Record<string, ProgressEntry>;
+  /** First section number; subsequent rendered sections count up from here. */
+  startNum?: number;
 }) {
   const [progress, setProgress] =
     useState<Record<string, ProgressEntry>>(initialProgress);
@@ -87,12 +90,22 @@ export default function PlanBoard({
   );
   const totalPct = totalPlanned ? Math.round((totalDone / totalPlanned) * 100) : 0;
 
+  // Number only the sections that actually render, counting up from startNum.
+  const pad = (x: number) => String(x).padStart(2, "0");
+  const showRoutine = plan.routine.length > 0;
+  const showRoadmap = phases.length > 0;
+  const showShopping = plan.shoppingList.length > 0 || plan.checkpoints.length > 0;
+  let secN = startNum;
+  const routineNum = showRoutine ? pad(secN++) : "";
+  const roadmapNum = showRoadmap ? pad(secN++) : "";
+  const shoppingNum = showShopping ? pad(secN++) : "";
+
   return (
     <>
       {/* ── [04] Routine ─────────────────────────────────────────────── */}
       {plan.routine.length > 0 && (
         <ReportSection
-          num="04"
+          num={routineNum}
           titleA="Your daily"
           titleB="routine"
           id="routine"
@@ -145,7 +158,7 @@ export default function PlanBoard({
       {/* ── [05] Roadmap — the protocol timeline ─────────────────────── */}
       {phases.length > 0 && (
         <ReportSection
-          num="05"
+          num={roadmapNum}
           titleA="Your phased"
           titleB="roadmap"
           id="roadmap"
@@ -234,7 +247,7 @@ export default function PlanBoard({
       {/* ── [06] Shopping list & checkpoints ─────────────────────────── */}
       {(plan.shoppingList.length > 0 || plan.checkpoints.length > 0) && (
         <ReportSection
-          num="06"
+          num={shoppingNum}
           titleA="Shopping list"
           titleB="& checkpoints"
           id="shopping"

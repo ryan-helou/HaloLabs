@@ -49,6 +49,23 @@ export default async function PersonPage({ params }: { params: { id: string } })
       : []),
   ];
 
+  // The plan leads with the doing — routine, roadmap, shopping — then the
+  // protocol detail and analysis map, and the raw observations come last as
+  // the reference every suggestion was built from. Sections number top to
+  // bottom, counting only those that actually render.
+  const plan = person.plan;
+  const planReady = hasPlan(person) && !!plan;
+  const hasRoutine = (plan?.routine?.length ?? 0) > 0;
+  const hasRoadmap =
+    (plan?.phases ?? []).filter((p) => p.suggestionIds.length > 0).length > 0;
+  const hasShopping =
+    (plan?.shoppingList?.length ?? 0) > 0 || (plan?.checkpoints?.length ?? 0) > 0;
+  const planCount = planReady
+    ? Number(hasRoutine) + Number(hasRoadmap) + Number(hasShopping)
+    : 0;
+  const adviceStart = planCount + 1;
+  const obsNum = String(planCount + 3).padStart(2, "0");
+
   return (
     // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
     // page — the report runs in Qoves-style framed bands, not floating cards.
@@ -58,14 +75,29 @@ export default async function PersonPage({ params }: { params: { id: string } })
       {/* Plan cover letter — summary, strengths, expectations (v2 only). */}
       <PlanOverview person={person} />
 
-      {/* The report body: numbered acts stacked as one framed document. */}
+      {/* The report body: numbered acts stacked as one framed document.
+          Order leads with what to do, ends with the raw observations. */}
       <div className="border-b border-line">
-        {/* [01] Observations */}
+        {/* Routine + roadmap + shopping — the execution pathway leads (v2). */}
+        {planReady && plan && (
+          <PlanBoard
+            personId={person.id}
+            plan={plan}
+            advice={person.advice}
+            initialProgress={progress}
+            startNum={1}
+          />
+        )}
+
+        {/* Protocol detail, then the analysis map. */}
+        <AdviceBoard advice={person.advice} startNum={adviceStart} />
+
+        {/* Observations last — the raw material every suggestion is built from. */}
         <ReportSection
-          num="01"
+          num={obsNum}
           titleA="What the"
           titleB="photos show"
-          blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion below is built from."
+          blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion above was built from."
           rail={
             <Link
               href={`/start/photos?id=${encodeURIComponent(person.id)}`}
@@ -89,19 +121,6 @@ export default async function PersonPage({ params }: { params: { id: string } })
             ))}
           </dl>
         </ReportSection>
-
-        {/* [02] Analysis + [03] Protocol */}
-        <AdviceBoard advice={person.advice} />
-
-        {/* [04] Routine + [05] Roadmap + [06] Shopping & checkpoints (v2 only). */}
-        {hasPlan(person) && person.plan && (
-          <PlanBoard
-            personId={person.id}
-            plan={person.plan}
-            advice={person.advice}
-            initialProgress={progress}
-          />
-        )}
       </div>
 
       {/* Wellbeing note — quiet, always present. */}
