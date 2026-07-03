@@ -97,6 +97,16 @@ export default function RootLayout({
                       Profiles
                     </a>
                   </li>
+                  <li>
+                    <a href="/privacy" className="text-ink-soft transition-colors hover:text-ink">
+                      Privacy &amp; biometrics
+                    </a>
+                  </li>
+                  <li>
+                    <a href="/terms" className="text-ink-soft transition-colors hover:text-ink">
+                      Terms
+                    </a>
+                  </li>
                 </ul>
               </div>
             </nav>

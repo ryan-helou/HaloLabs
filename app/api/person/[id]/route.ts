@@ -3,19 +3,47 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { IMAGE_EXTS, VIDEO_EXTS, resolvePersonDir } from "@/lib/paths";
 import { loadResults } from "@/lib/data";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Intake status for one person: profile presence, uploaded media, and whether
  * an analysis exists yet. Used by the /start/photos page to drive its
- * checklist.
+ * checklist. Cloud-aware: a signed-in owner of a DB person reads counts from
+ * Postgres; otherwise it inspects the local person folder.
  */
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
   const id = decodeURIComponent(params.id);
+
+  // ── Cloud path ──────────────────────────────────────────────────────
+  const session = await auth();
+  if (session?.user?.id) {
+    const person = await prisma.person.findFirst({
+      where: { userId: session.user.id, id },
+      include: {
+        photos: true,
+        results: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+    if (person) {
+      const result = person.results[0];
+      return NextResponse.json({
+        exists: true,
+        hasProfile: Boolean(person.profile),
+        images: person.photos.map((p) => p.r2Key),
+        videos: [],
+        analyzed: Boolean(result),
+        analyzedAt: result?.createdAt ?? null,
+      });
+    }
+  }
+
+  // ── Local path ──────────────────────────────────────────────────────
   const dir = resolvePersonDir(id);
   if (!dir) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });

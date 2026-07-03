@@ -4,25 +4,21 @@ import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
 import { resolvePersonDir } from "@/lib/paths";
 import { loadResults } from "@/lib/data";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { startAnalysis } from "@/lib/analyze";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
- * Kicks off (and reports on) a local analysis run for one person.
+ * Kicks off (and reports on) an analysis run for one person.
  *
- * POST {id} spawns a detached headless Claude Code process that runs the
- * analyze-faces skill for that person, entirely on this machine. Status is
- * tracked with dotfiles inside the person folder:
- *   .analysis.json  — { state, startedAt }
- *   .analysis.exit  — the process exit code, written when it finishes
- *   .analysis.log   — full run log (for debugging)
- *
- * GET ?id= returns { state: idle|running|done|error, ... } by combining the
- * status files with whether results.json now has a fresh record.
- *
- * If spawning fails (claude CLI missing), the response carries manual: true
- * and the UI shows copy-paste instructions instead — the analysis is a
- * Claude Code skill either way; this endpoint is just the convenience button.
+ * Cloud mode (signed in + the person is DB-backed): creates an AnalysisJob and
+ * runs the hosted Claude-API worker (lib/analyze), reporting status from the
+ * job row. Local mode (on-machine dev): spawns a headless `claude` process that
+ * runs the analyze-faces skill and tracks status via dotfiles in the person
+ * folder. The response shape is identical for both so the intake UI is agnostic.
  */
 
 const STATUS = ".analysis.json";
@@ -42,6 +38,11 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
+/** Does this signed-in user own a DB-backed person with this id? */
+async function dbPersonFor(userId: string, id: string) {
+  return prisma.person.findFirst({ where: { userId, id } });
+}
+
 export async function POST(req: Request) {
   let body: { id?: string };
   try {
@@ -50,12 +51,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const id = String(body.id ?? "");
+
+  // ── Cloud path ──────────────────────────────────────────────────────
+  const session = await auth();
+  if (session?.user?.id) {
+    const person = await dbPersonFor(session.user.id, id);
+    if (person) {
+      // Don't double-start if a job is already in flight.
+      const live = await prisma.analysisJob.findFirst({
+        where: { personId: id, status: { in: ["QUEUED", "RUNNING"] } },
+      });
+      if (live) return NextResponse.json({ started: false, alreadyRunning: true });
+      const jobId = await startAnalysis(session.user.id, id);
+      return NextResponse.json({ started: true, jobId });
+    }
+  }
+
+  // ── Local path (on-machine dev) ─────────────────────────────────────
   const dir = resolvePersonDir(id);
   if (!dir) {
     return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
   }
 
-  // Refuse to double-start a live run (stale = older than 30 minutes).
   const status = await readJson<StatusFile>(path.join(dir, STATUS));
   const exitExists = await fs
     .access(path.join(dir, EXIT))
@@ -84,7 +101,6 @@ export async function POST(req: Request) {
     `and write the full v2 record (observations, advice, plan) for ${id} into data/results.json, ` +
     `preserving all other people already in the file. Analyze ONLY ${id}.`;
 
-  // zsh -lc so the user's PATH (incl. ~/.local/bin/claude) applies.
   const script =
     `claude -p ${JSON.stringify(prompt)} ` +
     `--permission-mode acceptEdits ` +
@@ -110,6 +126,31 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = String(searchParams.get("id") ?? "");
+
+  // ── Cloud path ──────────────────────────────────────────────────────
+  const session = await auth();
+  if (session?.user?.id) {
+    const person = await dbPersonFor(session.user.id, id);
+    if (person) {
+      const job = await prisma.analysisJob.findFirst({
+        where: { personId: id },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!job) return NextResponse.json({ state: "idle" });
+      if (job.status === "COMPLETED") {
+        return NextResponse.json({ state: "done", analyzedAt: job.completedAt });
+      }
+      if (job.status === "FAILED") {
+        return NextResponse.json({ state: "error", hint: job.error ?? "Analysis failed." });
+      }
+      const elapsedSec = Math.round(
+        (Date.now() - job.createdAt.getTime()) / 1000
+      );
+      return NextResponse.json({ state: "running", elapsedSec });
+    }
+  }
+
+  // ── Local path ──────────────────────────────────────────────────────
   const dir = resolvePersonDir(id);
   if (!dir) {
     return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
