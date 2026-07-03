@@ -29,11 +29,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Account not found." }, { status: 404 });
   }
 
-  // Reuse or create the Stripe customer for this account.
+  // Reuse or create the Stripe customer for this account. Guests (passwordless)
+  // have only a synthetic @guest.halolabs email — don't put that on the
+  // customer, so Stripe Checkout collects their REAL email (the receipt
+  // address) and we can pre-fill it in the post-purchase account step. Real
+  // accounts reuse their known email.
+  const isGuest = !user.passwordHash;
   let customerId = user.stripeCustomerId;
   if (!customerId) {
     const customer = await stripe.customers.create({
-      email: user.email,
+      ...(isGuest ? {} : { email: user.email }),
       metadata: { userId: user.id },
     });
     customerId = customer.id;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { IMAGE_EXTS, VIDEO_EXTS, resolvePersonDir } from "@/lib/paths";
 import { loadResults } from "@/lib/data";
+import { orderCapturePhotos } from "@/lib/photo";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deletePersonForUser } from "@/lib/delete";
@@ -44,11 +45,11 @@ export async function GET(
         const dir = resolvePersonDir(id);
         if (dir) {
           try {
-            images = (await fs.readdir(dir))
-              .filter(
+            images = orderCapturePhotos(
+              (await fs.readdir(dir)).filter(
                 (n) => !n.startsWith(".") && IMAGE_EXTS.has(path.extname(n).toLowerCase())
               )
-              .sort();
+            );
           } catch {
             /* no folder yet — leave empty */
           }

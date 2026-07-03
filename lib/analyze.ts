@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { prisma } from "./db";
 import { getPhoto } from "./storage";
+import { orderCapturePhotos } from "./photo";
 import { anthropicConfigured } from "./env";
 import { resolvePersonDir, IMAGE_EXTS, contentTypeFor } from "./paths";
 import type { Person } from "./types";
@@ -369,8 +370,7 @@ async function collectImages(
     } catch {
       entries = [];
     }
-    entries.sort();
-    const shown = entries.slice(0, MAX_IMAGES);
+    const shown = orderCapturePhotos(entries).slice(0, MAX_IMAGES);
     for (const name of shown) photos.push(`${personId}/${name}`); // full gallery
     for (const name of shown.slice(0, maxBlocks)) {
       try {
