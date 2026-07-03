@@ -541,6 +541,32 @@ async function writeResult(
   ]);
 }
 
+// ── In-process concurrency cap ──────────────────────────────────────────────
+// Jobs run fire-and-forget in the Next server process. Without a limit, a viral
+// spike would spawn hundreds of simultaneous Claude calls — each holding
+// base64 images in memory + sharp CPU — which OOMs the container and blows the
+// Anthropic rate limit. This gates how many analyses run at once; the rest wait
+// their turn (their DB row stays QUEUED, so the poller still shows "building").
+// A durable queue + separate worker is the next step past this; the cap is the
+// cheap insurance that keeps a spike from taking the box down.
+const MAX_CONCURRENT_JOBS = Number(process.env.ANALYSIS_CONCURRENCY) || 4;
+let activeJobs = 0;
+const jobWaiters: (() => void)[] = [];
+
+function acquireSlot(): Promise<void> {
+  if (activeJobs < MAX_CONCURRENT_JOBS) {
+    activeJobs++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => jobWaiters.push(resolve));
+}
+
+function releaseSlot(): void {
+  const next = jobWaiters.shift();
+  if (next) next(); // hand the slot straight to the next waiter (count unchanged)
+  else activeJobs--;
+}
+
 /**
  * The FREE scan: generate only the cheap teaser (observations, the tagged move
  * list with one move revealed, a short cover note). The expensive routine /
@@ -549,6 +575,8 @@ async function writeResult(
  * buys. Fire-and-forget safe.
  */
 export async function runAnalysisJob(jobId: string): Promise<void> {
+  await acquireSlot();
+  try {
   const job = await loadJob(jobId);
   if (!job) return;
   try {
@@ -569,6 +597,9 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
   } catch (err) {
     await markFailed(jobId, err);
   }
+  } finally {
+    releaseSlot();
+  }
 }
 
 /**
@@ -578,6 +609,8 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
  * only when someone unlocks (see /api/person/[id]/full). Fire-and-forget safe.
  */
 export async function runFullPlanJob(jobId: string): Promise<void> {
+  await acquireSlot();
+  try {
   const job = await loadJob(jobId);
   if (!job) return;
   try {
@@ -622,6 +655,9 @@ export async function runFullPlanJob(jobId: string): Promise<void> {
     await writeResult(job, record, usage, "full");
   } catch (err) {
     await markFailed(jobId, err);
+  }
+  } finally {
+    releaseSlot();
   }
 }
 

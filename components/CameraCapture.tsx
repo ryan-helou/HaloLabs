@@ -1,15 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { FaceLandmarker } from "@mediapipe/tasks-vision";
+import {
+  loadFaceLandmarker,
+  extractMetrics,
+  evaluateShot,
+  drawFaceMesh,
+  type CoachTone,
+} from "@/lib/faceCoach";
 
 /**
  * Guided webcam capture modal. Steps through the shot list with a live
- * (mirrored) preview and a face guide; each kept frame is handed to the
- * parent as a JPEG File. The saved image is the raw camera frame — NOT
- * mirrored — so profiles read true left/right for the analysis.
+ * (mirrored) preview and an on-device face coach: a contour "scan" mesh is
+ * drawn over the face, and per-shot cues ("turn further left", "move closer")
+ * guide the pose. When the pose is held steady the shot is captured
+ * automatically; a manual shutter is always available as a fallback (and is the
+ * whole UI if the tracker can't load).
  *
- * Requires a secure context (https or localhost) for getUserMedia; the
- * parent only offers this path when `navigator.mediaDevices` exists.
+ * The saved image is the raw camera frame — NOT mirrored — so profiles read
+ * true left/right for the analysis, and the mesh is drawn on a separate overlay
+ * canvas so it never bakes into the uploaded photo.
+ *
+ * Requires a secure context (https or localhost) for getUserMedia; the parent
+ * only offers this path when `navigator.mediaDevices` exists.
  */
 
 export interface CameraShot {
@@ -18,30 +32,61 @@ export interface CameraShot {
   desc: string;
 }
 
+type TrackerState = "loading" | "ready" | "unavailable";
+
+// Consecutive qualifying detections before auto-capture fires (~0.6s at the
+// throttled detect rate). Long enough to avoid a twitchy false trigger.
+const HOLD_FRAMES = 9;
+const DETECT_INTERVAL_MS = 66; // ~15 detections/sec
+const STILL_MOTION = 0.01; // max normalized nose movement between frames
+
 export default function CameraCapture({
   shots,
   startIndex = 0,
   onSave,
   onClose,
+  onCameraError,
 }: {
   shots: CameraShot[];
   startIndex?: number;
   /** Called with the captured file; resolve when stored so we can advance. */
   onSave: (file: File, shotKey: string) => Promise<void>;
   onClose: () => void;
+  /** Fired when the camera can't be opened, so the parent can fall back. */
+  onCameraError?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const landmarkerRef = useRef<FaceLandmarker | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tracker, setTracker] = useState<TrackerState>("loading");
   const [shotIndex, setShotIndex] = useState(
     Math.min(startIndex, shots.length - 1)
   );
   const [preview, setPreview] = useState<{ url: string; blob: Blob } | null>(null);
   const [saving, setSaving] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [coach, setCoach] = useState<{ cue: string; tone: CoachTone | "none" }>(
+    { cue: "Finding your face…", tone: "none" }
+  );
 
   const shot = shots[shotIndex];
+
+  // Refs the render loop reads without re-subscribing each frame.
+  const shotKeyRef = useRef(shot.key);
+  shotKeyRef.current = shot.key;
+  const previewRef = useRef(false);
+  previewRef.current = preview !== null || countdown !== null;
+  const holdRef = useRef(0);
+  const prevNoseRef = useRef<{ x: number; y: number } | null>(null);
+  const lastDetectRef = useRef(0);
+  const lastVideoTimeRef = useRef(-1);
+  const capturingRef = useRef(false);
 
   // Open the camera once; stop every track on unmount.
   useEffect(() => {
@@ -70,30 +115,184 @@ export default function CameraCapture({
         setError(
           "Couldn't open the camera. Check the browser's camera permission, or use file upload instead."
         );
+        onCameraError?.();
       }
     })();
     return () => {
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load the face tracker (progressive enhancement — capture works without it).
+  useEffect(() => {
+    let cancelled = false;
+    loadFaceLandmarker()
+      .then((lm) => {
+        if (cancelled) return;
+        landmarkerRef.current = lm;
+        setTracker("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setTracker("unavailable");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const capture = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.videoWidth) return;
+    capturingRef.current = true;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    // Raw frame — intentionally not mirrored (see component docstring).
+    // Raw frame — intentionally not mirrored, and WITHOUT the mesh overlay.
     canvas.getContext("2d")!.drawImage(video, 0, 0);
     canvas.toBlob(
       (blob) => {
         if (blob) setPreview({ url: URL.createObjectURL(blob), blob });
+        capturingRef.current = false;
       },
       "image/jpeg",
       0.92
     );
   }, []);
+
+  // Sample mean luma over the face box (0..255) using a tiny reused canvas.
+  const sampleBrightness = useCallback(
+    (video: HTMLVideoElement, cx: number, cy: number, w: number, h: number) => {
+      const S = 24;
+      let c = sampleCanvasRef.current;
+      if (!c) {
+        c = document.createElement("canvas");
+        c.width = S;
+        c.height = S;
+        sampleCanvasRef.current = c;
+      }
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return 128;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const sx = Math.max(0, (cx - w / 2) * vw);
+      const sy = Math.max(0, (cy - h / 2) * vh);
+      const sw = Math.min(vw - sx, w * vw);
+      const sh = Math.min(vh - sy, h * vh);
+      if (sw <= 0 || sh <= 0) return 128;
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, S, S);
+      const { data } = ctx.getImageData(0, 0, S, S);
+      let sum = 0;
+      for (let i = 0; i < data.length; i += 4)
+        sum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      return sum / (data.length / 4);
+    },
+    []
+  );
+
+  // The coaching render loop. Runs continuously while the live view is up.
+  useEffect(() => {
+    if (tracker !== "ready") return;
+    let stopped = false;
+
+    const tick = () => {
+      if (stopped) return;
+      rafRef.current = requestAnimationFrame(tick);
+
+      const video = videoRef.current;
+      const overlay = overlayRef.current;
+      const lm = landmarkerRef.current;
+      if (!video || !overlay || !lm || !video.videoWidth) return;
+
+      // Freeze the loop while reviewing a captured frame.
+      if (previewRef.current) return;
+
+      const now = performance.now();
+      if (now - lastDetectRef.current < DETECT_INTERVAL_MS) return;
+      lastDetectRef.current = now;
+      if (video.currentTime === lastVideoTimeRef.current) return;
+      lastVideoTimeRef.current = video.currentTime;
+
+      // Keep the overlay canvas matched to the source resolution.
+      if (overlay.width !== video.videoWidth) {
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+      }
+      const octx = overlay.getContext("2d")!;
+      octx.clearRect(0, 0, overlay.width, overlay.height);
+
+      let result;
+      try {
+        result = lm.detectForVideo(video, now);
+      } catch {
+        return;
+      }
+      const m = extractMetrics(result);
+
+      if (!m) {
+        holdRef.current = 0;
+        prevNoseRef.current = null;
+        setCoach((c) =>
+          c.cue === "Fit your face in the frame" ? c : { cue: "Fit your face in the frame", tone: "none" }
+        );
+        return;
+      }
+
+      const brightness = sampleBrightness(video, m.cx, m.cy, m.faceW, m.faceH);
+      const verdict = evaluateShot(shotKeyRef.current, m, brightness);
+
+      // Stillness — small nose movement between detections.
+      const nose = m.landmarks[1];
+      const prev = prevNoseRef.current;
+      const motion = prev
+        ? Math.hypot(nose.x - prev.x, nose.y - prev.y)
+        : 1;
+      prevNoseRef.current = { x: nose.x, y: nose.y };
+      const still = motion < STILL_MOTION;
+
+      // Mesh color reflects state: neutral while adjusting, green when locked.
+      const locked = verdict.ok && still;
+      drawFaceMesh(octx, m.landmarks, overlay.width, overlay.height, {
+        color: locked
+          ? "rgba(122,167,143,0.95)"
+          : "rgba(255,255,255,0.55)",
+        lineWidth: locked ? 2.4 : 1.6,
+        glow: locked ? "rgba(122,167,143,0.9)" : undefined,
+      });
+
+      setCoach((c) =>
+        c.cue === verdict.cue && c.tone === verdict.tone ? c : { cue: verdict.cue, tone: verdict.tone }
+      );
+
+      // Auto-capture once the pose holds steady.
+      if (locked) {
+        holdRef.current += 1;
+        if (
+          holdRef.current >= HOLD_FRAMES &&
+          !capturingRef.current &&
+          !previewRef.current
+        ) {
+          holdRef.current = 0;
+          capture();
+        }
+      } else {
+        holdRef.current = 0;
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      stopped = true;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [tracker, capture, sampleBrightness]);
+
+  // Reset the hold counter whenever we change shots or return to live view.
+  useEffect(() => {
+    holdRef.current = 0;
+    prevNoseRef.current = null;
+  }, [shotIndex, preview]);
 
   // Belt-and-braces: whenever we return to the live view, make sure the
   // stream is still attached and playing (covers any remount edge case).
@@ -106,7 +305,7 @@ export default function CameraCapture({
     }
   }, [preview, shotIndex]);
 
-  // 3-2-1 countdown so both hands can be off the keyboard for the pose.
+  // 3-2-1 countdown for the manual timer path.
   useEffect(() => {
     if (countdown === null) return;
     if (countdown === 0) {
@@ -138,6 +337,8 @@ export default function CameraCapture({
       setSaving(false);
     }
   }
+
+  const coaching = tracker === "ready" && !error;
 
   return (
     <div
@@ -183,6 +384,14 @@ export default function CameraCapture({
                 muted
                 className="h-full w-full object-cover [transform:scaleX(-1)]"
               />
+              {/* Mesh overlay — mirrored to line up with the mirrored video. */}
+              <canvas
+                ref={overlayRef}
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 h-full w-full object-cover [transform:scaleX(-1)] transition-opacity ${
+                  coaching && !preview ? "opacity-100" : "opacity-0"
+                }`}
+              />
               {preview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -192,23 +401,53 @@ export default function CameraCapture({
                 />
               ) : (
                 <>
-                  {/* Face guide */}
-                  <svg
-                    aria-hidden
-                    viewBox="0 0 400 300"
-                    className="pointer-events-none absolute inset-0 h-full w-full"
-                  >
-                    <ellipse
-                      cx="200"
-                      cy="145"
-                      rx="80"
-                      ry="105"
-                      fill="none"
-                      stroke="rgba(255,255,255,0.55)"
-                      strokeWidth="1.5"
-                      strokeDasharray="6 5"
-                    />
-                  </svg>
+                  {/* Static face guide only when the live coach isn't running. */}
+                  {!coaching && (
+                    <svg
+                      aria-hidden
+                      viewBox="0 0 400 300"
+                      className="pointer-events-none absolute inset-0 h-full w-full"
+                    >
+                      <ellipse
+                        cx="200"
+                        cy="145"
+                        rx="80"
+                        ry="105"
+                        fill="none"
+                        stroke="rgba(255,255,255,0.55)"
+                        strokeWidth="1.5"
+                        strokeDasharray="6 5"
+                      />
+                    </svg>
+                  )}
+
+                  {/* Live coaching cue */}
+                  {coaching && countdown === null && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+                      <span
+                        className={`rounded-full px-4 py-2 text-sm font-medium shadow-float backdrop-blur-sm transition-colors ${
+                          coach.tone === "ready"
+                            ? "bg-pine text-paper"
+                            : "bg-ink/70 text-paper"
+                        }`}
+                      >
+                        {coach.tone === "ready" && (
+                          <span aria-hidden className="mr-1.5">✓</span>
+                        )}
+                        {coach.cue}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Tracker still loading */}
+                  {tracker === "loading" && ready && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+                      <span className="rounded-full bg-ink/70 px-4 py-2 text-sm font-medium text-paper/90 backdrop-blur-sm">
+                        Starting the guide…
+                      </span>
+                    </div>
+                  )}
+
                   {countdown !== null && (
                     <span className="absolute inset-0 flex items-center justify-center font-display text-8xl font-medium text-paper [text-shadow:0_2px_12px_rgba(0,0,0,0.5)]">
                       {countdown}
@@ -264,19 +503,22 @@ export default function CameraCapture({
                 Skip shot
               </button>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCountdown(3)}
-                  disabled={!ready || countdown !== null}
-                  className="rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-soft hover:text-ink disabled:opacity-40"
-                >
-                  3s timer
-                </button>
+                {!coaching && (
+                  <button
+                    type="button"
+                    onClick={() => setCountdown(3)}
+                    disabled={!ready || countdown !== null}
+                    className="rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink-soft hover:text-ink disabled:opacity-40"
+                  >
+                    3s timer
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={capture}
                   disabled={!ready || countdown !== null}
                   aria-label="Capture photo"
+                  title={coaching ? "Capture now (auto-captures when the pose is held)" : "Capture photo"}
                   className="flex h-12 w-12 items-center justify-center rounded-full bg-pine text-paper shadow-float transition-transform hover:scale-105 disabled:opacity-40"
                 >
                   <span className="h-8 w-8 rounded-full border-2 border-paper" />
