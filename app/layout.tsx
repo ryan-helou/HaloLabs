@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import { ToastProvider } from "@/components/Toast";
 
 const body = Manrope({
   subsets: ["latin"],
@@ -38,8 +39,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans">
-        <Header />
-        <main className="mx-auto max-w-5xl px-6 pb-8 pt-6">{children}</main>
+        <ToastProvider>
+          <Header />
+          <main className="mx-auto max-w-5xl px-6 pb-8 pt-6">{children}</main>
         <footer className="overflow-hidden border-t border-line">
           <div className="mx-auto grid max-w-[1500px] gap-10 px-6 py-12 sm:px-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <div>
@@ -118,6 +120,7 @@ export default function RootLayout({
             HALOLABS
           </p>
         </footer>
+        </ToastProvider>
       </body>
     </html>
   );

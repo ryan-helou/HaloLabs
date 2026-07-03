@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { photoUrl } from "@/lib/photo";
 import CameraCapture from "./CameraCapture";
+import { useToast } from "./Toast";
 
 /**
  * Guided capture + upload + local analysis trigger.
@@ -126,6 +127,7 @@ function MiniHead({ variant }: { variant: string }) {
 export default function CaptureFlow() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id") ?? "";
+  const toast = useToast();
 
   const [status, setStatus] = useState<IntakeStatus | null>(null);
   const [covered, setCovered] = useState<Set<string>>(new Set());
@@ -254,6 +256,13 @@ export default function CaptureFlow() {
         setUploadErrors([data.error ?? "Upload failed"]);
       } else if (data.errors?.length) {
         setUploadErrors(data.errors);
+      }
+      const savedCount = data.saved?.length ?? 0;
+      if (savedCount > 0) {
+        toast({
+          kind: "success",
+          message: `${savedCount} photo${savedCount === 1 ? "" : "s"} added.`,
+        });
       }
     } catch {
       setUploadErrors(["Upload failed — is the dev server running?"]);
