@@ -22,6 +22,11 @@ import type { Person } from "./types";
 
 const MODEL = process.env.ANALYSIS_MODEL || "claude-sonnet-5";
 const MAX_IMAGES = 8;
+// The FREE teaser only needs to hook — one or two frontal shots is plenty to
+// name strengths + the move list. The paid pass sends all MAX_IMAGES. Since
+// photos in the vision input are the biggest cost driver, this roughly halves
+// the free-scan cost. Override with ANALYSIS_TEASER_IMAGES.
+const TEASER_MAX_IMAGES = Number(process.env.ANALYSIS_TEASER_IMAGES) || 2;
 
 // Longest-edge cap for photos sent to the vision API. Phone photos are often
 // 3000–4000px, which Claude bills as high-resolution (up to ~4784 image tokens
@@ -320,11 +325,15 @@ async function toImageBlock(
 }
 
 /**
- * Collect a person's images as base64 blocks, plus the photo references to
- * store on the result. Prefers R2 (Photo rows); falls back to local disk.
+ * Collect a person's images. `photos` always lists ALL their photos (for the
+ * gallery), but only the first `maxBlocks` are decoded and sent to the model —
+ * so the free teaser can analyze just the frontal shot(s) while the paid pass
+ * sends everything. Photos come in capture order (front first), so the first
+ * couple are the frontal ones. Prefers R2 (Photo rows); falls back to disk.
  */
 async function collectImages(
-  personId: string
+  personId: string,
+  maxBlocks: number = MAX_IMAGES
 ): Promise<{ photos: string[]; blocks: ImageBlock[] }> {
   const photos: string[] = [];
   const blocks: ImageBlock[] = [];
@@ -336,10 +345,10 @@ async function collectImages(
   });
 
   if (rows.length > 0) {
-    for (const row of rows) {
+    for (const row of rows) photos.push(row.r2Key); // full gallery
+    for (const row of rows.slice(0, maxBlocks)) {
       const obj = await getPhoto(row.r2Key);
       if (!obj) continue;
-      photos.push(row.r2Key);
       blocks.push(
         await toImageBlock(Buffer.from(obj.body), row.contentType || obj.contentType)
       );
@@ -359,10 +368,11 @@ async function collectImages(
       entries = [];
     }
     entries.sort();
-    for (const name of entries.slice(0, MAX_IMAGES)) {
+    const shown = entries.slice(0, MAX_IMAGES);
+    for (const name of shown) photos.push(`${personId}/${name}`); // full gallery
+    for (const name of shown.slice(0, maxBlocks)) {
       try {
         const data = await fs.readFile(path.join(dir, name));
-        photos.push(`${personId}/${name}`);
         blocks.push(await toImageBlock(data, contentTypeFor(path.extname(name))));
       } catch {
         /* skip unreadable file */
@@ -540,7 +550,9 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
   const job = await loadJob(jobId);
   if (!job) return;
   try {
-    const { photos, blocks } = await collectImages(job.personId);
+    // Teaser: only the frontal shot(s) go to the model (cheap); the record still
+    // lists every uploaded photo for the gallery.
+    const { photos, blocks } = await collectImages(job.personId, TEASER_MAX_IMAGES);
     if (blocks.length === 0) throw new Error("No readable photos found for this person.");
     const { payload, usage } = await callModel({
       system: TEASER_SYSTEM_PROMPT,
@@ -577,7 +589,7 @@ export async function runFullPlanJob(jobId: string): Promise<void> {
     if (blocks.length === 0) throw new Error("No readable photos found for this person.");
 
     const teaserContext = teaser
-      ? `You already produced this free teaser for them — keep the SAME observations, the SAME moves (same ids, same titles, same count — do not add or drop any), and the SAME strengths/summary. Only flesh out the detail and build the plan:\n${JSON.stringify(
+      ? `You already showed them a quick FREE teaser generated from just their main photo — here it is. Now do the COMPLETE deep analysis using ALL of their photos: you can now see the profile, 3/4, and detail shots the teaser couldn't. KEEP every move from the teaser (same ids and titles — don't drop any the user was promised) and ADD any new moves the additional angles reveal. Refine the observations and strengths with what the extra photos show. The teaser:\n${JSON.stringify(
           {
             observations: teaser.observations,
             advice: teaser.advice,
@@ -594,33 +606,18 @@ export async function runFullPlanJob(jobId: string): Promise<void> {
       tool: ANALYSIS_TOOL,
       toolName: "emit_analysis",
       userText:
-        `Complete the full plan for ${job.person.displayName}. ${profileTextFor(job.person.profile)}\n\n${teaserContext}\n\n` +
+        `Complete the deep analysis + full plan for ${job.person.displayName}. ${profileTextFor(job.person.profile)}\n\n${teaserContext}\n\n` +
         `Call emit_analysis with the COMPLETE v2 record: every move fully written (detail, why tied to their photos, how as 2–5 steps, products matched to budget, timeline, frequency, phase, routineSlot), plus the full plan — exactly 3 phases distributing every move id, an AM/PM/weekly routine with correct layering, a deduplicated shoppingList, and 3–4 checkpoints.`,
       blocks,
     });
 
-    const full = buildRecord(job.personId, job.person.displayName, photos, payload);
-    // Preserve the exact cover the user already saw (observations + summary +
-    // strengths + expectations) so unlocking never silently rewrites it; take
-    // the newly-generated advice detail + plan.
-    const merged: Person = {
-      ...full,
-      observations: teaser?.observations ?? full.observations,
-      builtFor: teaser?.builtFor ?? full.builtFor,
-      ...(full.plan
-        ? {
-            plan: {
-              ...full.plan,
-              summary: teaser?.plan?.summary?.trim() ? teaser.plan.summary : full.plan.summary,
-              strengths: teaser?.plan?.strengths?.length ? teaser.plan.strengths : full.plan.strengths,
-              expectations: teaser?.plan?.expectations?.trim()
-                ? teaser.plan.expectations
-                : full.plan.expectations,
-            },
-          }
-        : {}),
-    };
-    await writeResult(job, merged, usage, "full");
+    // The paid pass is authoritative — it analyzed every photo. Take it whole;
+    // only fall back to the teaser's onboarding chips if the model omitted them.
+    const record = buildRecord(job.personId, job.person.displayName, photos, payload);
+    if ((!record.builtFor || record.builtFor.length === 0) && teaser?.builtFor?.length) {
+      record.builtFor = teaser.builtFor;
+    }
+    await writeResult(job, record, usage, "full");
   } catch (err) {
     await markFailed(jobId, err);
   }
