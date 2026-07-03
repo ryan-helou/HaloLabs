@@ -34,10 +34,30 @@ export async function GET(
     });
     if (person) {
       const result = person.results[0];
+      // Photos normally come from Photo rows (R2). But when R2 isn't configured
+      // (prod uses the disk volume), cloudUpload writes files to the person
+      // folder with no Photo row — so fall back to listing that folder, or the
+      // capture page would show zero photos and never let the user proceed. The
+      // capture grid builds `<id>/<name>`, so return bare filenames here.
+      let images = person.photos.map((p) => p.r2Key);
+      if (images.length === 0) {
+        const dir = resolvePersonDir(id);
+        if (dir) {
+          try {
+            images = (await fs.readdir(dir))
+              .filter(
+                (n) => !n.startsWith(".") && IMAGE_EXTS.has(path.extname(n).toLowerCase())
+              )
+              .sort();
+          } catch {
+            /* no folder yet — leave empty */
+          }
+        }
+      }
       return NextResponse.json({
         exists: true,
         hasProfile: Boolean(person.profile),
-        images: person.photos.map((p) => p.r2Key),
+        images,
         videos: [],
         analyzed: Boolean(result),
         analyzedAt: result?.createdAt ?? null,
