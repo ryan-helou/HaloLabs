@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { loadPerson } from "@/lib/data";
 import { loadProgressForPerson } from "@/lib/progress";
-import { hasPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
+import { hasPlan, hasFullPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import { isUnlocked } from "@/lib/entitlement";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
 import HaloGlance from "@/components/HaloGlance";
 import LockedScanHook from "@/components/LockedScanHook";
+import FullPlanBuilder from "@/components/FullPlanBuilder";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import PaywallBar from "@/components/PaywallBar";
@@ -91,6 +92,11 @@ export default async function PersonPage({
   const adviceStart = planCount + 1;
   const obsNum = String(planCount + 3).padStart(2, "0");
 
+  // Split-generation: a just-unlocked plan may still be a teaser (the paid
+  // routine/roadmap/shopping hasn't been generated yet). Show the build screen
+  // until it's ready, then the page refreshes into the full plan.
+  const building = !locked && planReady && !hasFullPlan(person);
+
   return (
     // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
     // page — the report runs in Qoves-style framed bands, not floating cards.
@@ -101,6 +107,13 @@ export default async function PersonPage({
     >
       <PersonHero person={person} />
 
+      {building ? (
+        /* Just unlocked, full plan still generating — build screen takes over
+           until it's ready, then refreshes into the plan below. */
+        <div className="border-b border-line">
+          <FullPlanBuilder personId={person.id} />
+        </div>
+      ) : (
       <ProgressProvider personId={person.id} initial={progress}>
         {/* Unlocked: the digest — what to start with, where the plan focuses,
             what already works. Locked: the free-scan hook — proof it saw them
@@ -120,7 +133,7 @@ export default async function PersonPage({
             Routine + roadmap stay open as the daily driver; the deeper
             reference (shopping, protocol, analysis, photos) collapses. */}
         <div className="border-b border-line">
-          {planReady && plan && (
+          {planReady && plan && hasFullPlan(person) && (
             <PlanBoard
               plan={plan}
               advice={person.advice}
@@ -172,6 +185,7 @@ export default async function PersonPage({
           </ReportSection>
         </div>
       </ProgressProvider>
+      )}
 
       {/* The value section — what membership opens. Only while locked. */}
       {locked && totalSuggestions > 0 && (
