@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { photoUrl } from "@/lib/photo";
 import CameraCapture from "./CameraCapture";
 import { useToast } from "./Toast";
+import { track } from "@/lib/track";
 
 /**
  * Guided capture + upload + local analysis trigger.
@@ -273,6 +274,7 @@ export default function CaptureFlow() {
 
   async function beginAnalysis() {
     setAnalysis({ phase: "starting" });
+    track("scan_started");
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",

@@ -3,6 +3,7 @@ import { Manrope, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import { ToastProvider } from "@/components/Toast";
+import Analytics from "@/components/Analytics";
 import { appUrl } from "@/lib/env";
 
 const body = Manrope({
@@ -69,6 +70,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans">
+        <Analytics />
         <ToastProvider>
           <a
             href="#main"

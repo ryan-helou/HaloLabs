@@ -7,6 +7,7 @@ import { userHasPeople } from "@/lib/repo";
 import PersonCard from "@/components/PersonCard";
 import SignedInAs from "@/components/SignedInAs";
 import DangerZone from "@/components/DangerZone";
+import TrackOnMount from "@/components/TrackOnMount";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,7 @@ export default async function ProfilesPage({
         </div>
       </div>
 
+      {justUpgraded && <TrackOnMount event="membership_active" />}
       {justUpgraded && (
         <div className="mb-6 flex items-center gap-3 rounded-2xl border border-pine/30 bg-sage/50 px-5 py-4">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-pine text-paper">
