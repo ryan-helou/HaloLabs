@@ -17,6 +17,7 @@ import FullPlanBuilder from "@/components/FullPlanBuilder";
 import PostPurchaseSetup from "@/components/PostPurchaseSetup";
 import MemberTabs from "@/components/MemberTabs";
 import PlanBoard from "@/components/PlanBoard";
+import MovePlan from "@/components/MovePlan";
 import ReportSection from "@/components/ReportSection";
 import ProgressTimeline from "@/components/ProgressTimeline";
 import PaywallBar from "@/components/PaywallBar";
@@ -200,11 +201,10 @@ export default async function PersonPage({
                 id: "plan",
                 label: "Your plan",
                 content: (
-                  <PlanBoard
+                  <MovePlan
                     plan={plan}
                     advice={person.advice}
                     personId={person.id}
-                    startNum={1}
                   />
                 ),
               },
