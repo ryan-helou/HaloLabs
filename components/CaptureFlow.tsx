@@ -371,8 +371,9 @@ export default function CaptureFlow() {
               Your plan is ready.
             </h1>
             <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-ink-soft">
-              Observations, prioritized suggestions, your routine, and a
-              shopping list — built from your photos and your answers.
+              Neutral observations and your personalized move list — built from
+              your photos. Unlock any time for the full routine, roadmap, and
+              shopping list.
             </p>
             <Link
               href={`/person/${encodeURIComponent(id)}`}
@@ -392,8 +393,8 @@ export default function CaptureFlow() {
             </h1>
             <p className="mx-auto mt-4 max-w-md text-[15px] leading-relaxed text-ink-soft">
               Every photo is being examined — hair, skin, brows, facial hair,
-              style — and your answers are shaping the plan. This runs entirely
-              on your machine and usually takes a few minutes.
+              and style — to build your free scan. This usually takes a minute
+              or two.
             </p>
             {analysis.phase === "running" && analysis.elapsedSec > 0 && (
               <p className="mt-3 font-mono text-xs text-ink-soft">
@@ -404,8 +405,8 @@ export default function CaptureFlow() {
               elapsedSec={analysis.phase === "running" ? analysis.elapsedSec : 0}
             />
             <p className="mx-auto mt-8 max-w-sm text-xs leading-relaxed text-ink-soft">
-              You can leave this page — the analysis keeps running and your plan
-              will be on your profile when it&apos;s done.
+              You can leave this page — the analysis keeps running and your scan
+              will be ready here when it&apos;s done.
             </p>
           </>
         )}
@@ -732,10 +733,10 @@ export default function CaptureFlow() {
 // step only ever pulses (never checks off), so nothing claims "done" before the
 // real done state flips the whole screen. Honest, not fabricated precision.
 const WAIT_STEPS: { label: string; startsAt: number }[] = [
-  { label: "Reading your onboarding answers", startsAt: 0 },
-  { label: "Viewing each photo in detail", startsAt: 6 },
-  { label: "Writing observations & suggestions", startsAt: 40 },
-  { label: "Assembling your routine and plan", startsAt: 90 },
+  { label: "Looking at your photos", startsAt: 0 },
+  { label: "Reading your features in detail", startsAt: 6 },
+  { label: "Noting your strengths", startsAt: 30 },
+  { label: "Writing your observations & moves", startsAt: 60 },
 ];
 
 function WaitSteps({ elapsedSec }: { elapsedSec: number }) {
