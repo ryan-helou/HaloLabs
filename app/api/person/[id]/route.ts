@@ -5,8 +5,10 @@ import { IMAGE_EXTS, VIDEO_EXTS, resolvePersonDir } from "@/lib/paths";
 import { loadResults } from "@/lib/data";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { deletePersonForUser } from "@/lib/delete";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
  * Intake status for one person: profile presence, uploaded media, and whether
@@ -79,4 +81,29 @@ export async function GET(
     analyzed: Boolean(person),
     analyzedAt: person?.analyzedAt ?? null,
   });
+}
+
+/**
+ * Delete a person the signed-in user owns — their photos (R2), check-offs, and
+ * analysis records. This is what makes the privacy page's "delete individual
+ * photos" promise real. Only DB-backed people (real accounts) are deletable;
+ * the local seed/dev people aren't user data.
+ */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+  }
+  const id = decodeURIComponent(params.id);
+  const deleted = await deletePersonForUser(session.user.id, id);
+  if (!deleted) {
+    return NextResponse.json(
+      { error: "That profile doesn't exist on your account." },
+      { status: 404 }
+    );
+  }
+  return NextResponse.json({ deleted: true });
 }
