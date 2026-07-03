@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { photoUrl } from "@/lib/photo";
+import { normalizeForUpload } from "@/lib/heic";
 import CameraCapture from "./CameraCapture";
 import { useToast } from "./Toast";
 import { track } from "@/lib/track";
@@ -123,40 +124,6 @@ function MiniHead({ variant }: { variant: string }) {
       )}
     </svg>
   );
-}
-
-/**
- * Convert any HEIC/HEIF files to JPEG in the browser so the hosted uploader
- * (JPG/PNG/WebP only in the cloud) accepts them. heic2any is ~1.4MB and only
- * needed for iOS library photos, so it's dynamically imported on first use.
- * A conversion failure falls through with the original file — the server then
- * rejects it with guidance rather than the whole batch failing.
- */
-async function normalizeForUpload(files: File[]): Promise<File[]> {
-  const isHeic = (f: File) =>
-    /\.hei[cf]$/i.test(f.name) ||
-    f.type === "image/heic" ||
-    f.type === "image/heif";
-  if (!files.some(isHeic)) return files;
-
-  let convert: typeof import("heic2any").default | null = null;
-  const out: File[] = [];
-  for (const f of files) {
-    if (!isHeic(f)) {
-      out.push(f);
-      continue;
-    }
-    try {
-      convert = convert ?? (await import("heic2any")).default;
-      const res = await convert({ blob: f, toType: "image/jpeg", quality: 0.9 });
-      const blob = Array.isArray(res) ? res[0] : res;
-      const name = f.name.replace(/\.hei[cf]$/i, ".jpg");
-      out.push(new File([blob], name, { type: "image/jpeg" }));
-    } catch {
-      out.push(f);
-    }
-  }
-  return out;
 }
 
 export default function CaptureFlow() {
