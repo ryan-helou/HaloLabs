@@ -66,6 +66,17 @@ export async function POST(req: Request) {
       } else if (customerId) {
         await setStatus({ stripeCustomerId: customerId }, "active");
       }
+      // Persist the email the buyer typed at checkout onto the Stripe customer,
+      // so the post-purchase account step can pre-fill it (it's their receipt
+      // address). Best-effort — never fail the webhook over it.
+      const enteredEmail = s.customer_details?.email;
+      if (stripe && customerId && enteredEmail) {
+        try {
+          await stripe.customers.update(customerId, { email: enteredEmail });
+        } catch {
+          /* cosmetic — the retrieve fallback still has Stripe's own copy */
+        }
+      }
       break;
     }
     case "customer.subscription.created":

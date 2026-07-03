@@ -51,7 +51,14 @@ function Chip({
   );
 }
 
-export default function PostPurchaseSetup({ personId }: { personId: string }) {
+export default function PostPurchaseSetup({
+  personId,
+  initialEmail,
+}: {
+  personId: string;
+  /** Email typed at Stripe checkout (the receipt address); pre-filled + locked. */
+  initialEmail?: string;
+}) {
   const router = useRouter();
   const [step, setStep] = useState<"account" | "info">("account");
   const [submitting, setSubmitting] = useState(false);
@@ -59,8 +66,11 @@ export default function PostPurchaseSetup({ personId }: { personId: string }) {
 
   // Account
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [password, setPassword] = useState("");
+  // When we know the checkout email, show it read-only — it's their receipt
+  // address; they shouldn't retype (or change) it here.
+  const emailLocked = Boolean(initialEmail);
 
   // Info
   const [goals, setGoals] = useState("");
@@ -141,28 +151,44 @@ export default function PostPurchaseSetup({ personId }: { personId: string }) {
               Create your account
             </h2>
             <p className="mx-auto mt-3 max-w-md text-center text-[15px] leading-relaxed text-ink-soft">
-              Save your plan so you can come back to it. This attaches an email
-              and password to the scan you just unlocked — nothing is lost.
+              Set your name and a password so you can log back in and keep the
+              scan you just unlocked
+              {emailLocked ? " — your email's already in from checkout" : ""}.
+              Nothing is lost.
             </p>
 
             <form onSubmit={claimAccount} className="mx-auto mt-8 max-w-md space-y-3">
               <input
                 type="text"
+                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Your name (optional)"
+                placeholder="Your name"
                 autoComplete="name"
                 className={inputCls}
               />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                className={inputCls}
-              />
+              <div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  readOnly={emailLocked}
+                  aria-readonly={emailLocked}
+                  className={`${inputCls} ${
+                    emailLocked
+                      ? "cursor-not-allowed bg-chip text-ink-soft focus:border-line focus:ring-0"
+                      : ""
+                  }`}
+                />
+                {emailLocked && (
+                  <p className="mt-1.5 px-1 text-xs text-ink-soft">
+                    Your receipt goes to this email — it&apos;s also your login.
+                  </p>
+                )}
+              </div>
               <input
                 type="password"
                 required
@@ -176,7 +202,7 @@ export default function PostPurchaseSetup({ personId }: { personId: string }) {
               {error && <p className="text-sm text-clay">{error}</p>}
               <button
                 type="submit"
-                disabled={submitting || !email || password.length < 8}
+                disabled={submitting || !name.trim() || !email || password.length < 8}
                 className="w-full rounded-full bg-pine px-6 py-3.5 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep disabled:opacity-50"
               >
                 {submitting ? "Creating…" : "Create account →"}

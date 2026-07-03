@@ -7,6 +7,7 @@ import { loadCheckins } from "@/lib/checkins";
 import { hasPlan, hasFullPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import { isActive } from "@/lib/entitlement";
 import { auth } from "@/lib/auth";
+import { checkoutEmailFor } from "@/lib/receipt";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
@@ -108,6 +109,13 @@ export default async function PersonPage({
   // until it's ready, then the page refreshes into the full plan.
   const building = !locked && planReady && !hasFullPlan(person);
 
+  // A paying guest sets up their account next — pre-fill the email they typed
+  // at Stripe checkout (their receipt address) so they don't retype it.
+  const checkoutEmail =
+    building && isGuest && session?.user?.id
+      ? await checkoutEmailFor(session.user.id)
+      : null;
+
   // Progress check-ins are a member feature (part of the plan you paid for).
   const checkins = !locked && !building ? await loadCheckins(person.id) : [];
 
@@ -127,7 +135,10 @@ export default async function PersonPage({
            to the build screen, which refreshes into the plan when ready. */
         <div className="border-b border-line">
           {isGuest ? (
-            <PostPurchaseSetup personId={person.id} />
+            <PostPurchaseSetup
+              personId={person.id}
+              initialEmail={checkoutEmail ?? undefined}
+            />
           ) : (
             <FullPlanBuilder personId={person.id} />
           )}

@@ -56,6 +56,29 @@ img {
   }
 }
 
+/* One-time analysis sweep across the report-hero photo: a bright line travels
+   top → bottom once on load while the landmark mesh fades in behind it. */
+@keyframes scan-sweep {
+  0% {
+    top: -6%;
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    top: 103%;
+    opacity: 0;
+  }
+}
+
+.scan-sweep {
+  animation: scan-sweep 2.1s cubic-bezier(0.45, 0, 0.25, 1) 0.35s both;
+}
+
 /* Briefly highlight a suggestion when you jump to it from the map/shortlist. */
 @keyframes target-flash {
   0% {
