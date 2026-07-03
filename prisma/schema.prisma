@@ -17,8 +17,16 @@ model User {
   image         String?
   createdAt     DateTime  @default(now())
 
+  // Credentials sign-in: bcrypt hash. Null for OAuth-only accounts (Google, later).
+  passwordHash String?
+  // Hard 18+ gate, now enforced at signup — not only inside the wizard.
+  ageConfirmed18Plus Boolean @default(false)
+
   stripeCustomerId String? @unique
   credits          Int     @default(0)
+  // Entitlement flag the paywall reads. "active" lifts the blur; Stripe's
+  // webhook flips this in Phase 3. Anything else (the default) keeps it locked.
+  subscriptionStatus String @default("inactive")
 
   accounts Account[]
   sessions Session[]
