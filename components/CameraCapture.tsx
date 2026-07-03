@@ -74,6 +74,8 @@ export default function CameraCapture({
   const [coach, setCoach] = useState<{ cue: string; tone: CoachTone | "none" }>(
     { cue: "Finding your face…", tone: "none" }
   );
+  // 0..1 fill of the auto-capture "hold" ring while the pose is locked.
+  const [holdProgress, setHoldProgress] = useState(0);
 
   const shot = shots[shotIndex];
 
@@ -87,6 +89,9 @@ export default function CameraCapture({
   const lastDetectRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
   const capturingRef = useRef(false);
+  // Consecutive non-locked detections tolerated before the hold resets — a
+  // small grace so a one-frame threshold wobble doesn't stall the auto-capture.
+  const missRef = useRef(0);
 
   // Open the camera once; stop every track on unmount.
   useEffect(() => {
@@ -232,7 +237,9 @@ export default function CameraCapture({
 
       if (!m) {
         holdRef.current = 0;
+        missRef.current = 0;
         prevNoseRef.current = null;
+        setHoldProgress((p) => (p === 0 ? p : 0));
         setCoach((c) =>
           c.cue === "Fit your face in the frame" ? c : { cue: "Fit your face in the frame", tone: "none" }
         );
@@ -265,8 +272,10 @@ export default function CameraCapture({
         c.cue === verdict.cue && c.tone === verdict.tone ? c : { cue: verdict.cue, tone: verdict.tone }
       );
 
-      // Auto-capture once the pose holds steady.
+      // Auto-capture once the pose holds steady, with a short grace window so a
+      // single flickering frame doesn't reset the countdown.
       if (locked) {
+        missRef.current = 0;
         holdRef.current += 1;
         if (
           holdRef.current >= HOLD_FRAMES &&
@@ -274,10 +283,17 @@ export default function CameraCapture({
           !previewRef.current
         ) {
           holdRef.current = 0;
+          setHoldProgress(0);
           capture();
+        } else {
+          setHoldProgress(Math.min(1, holdRef.current / HOLD_FRAMES));
         }
       } else {
-        holdRef.current = 0;
+        missRef.current += 1;
+        if (missRef.current > 2) {
+          holdRef.current = 0;
+          setHoldProgress((p) => (p === 0 ? p : 0));
+        }
       }
     };
 
@@ -291,7 +307,9 @@ export default function CameraCapture({
   // Reset the hold counter whenever we change shots or return to live view.
   useEffect(() => {
     holdRef.current = 0;
+    missRef.current = 0;
     prevNoseRef.current = null;
+    setHoldProgress(0);
   }, [shotIndex, preview]);
 
   // Belt-and-braces: whenever we return to the live view, make sure the
@@ -419,6 +437,34 @@ export default function CameraCapture({
                         strokeDasharray="6 5"
                       />
                     </svg>
+                  )}
+
+                  {/* Auto-capture hold ring — fills as the locked pose is held. */}
+                  {coaching && countdown === null && holdProgress > 0 && (
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <svg viewBox="0 0 100 100" className="h-24 w-24 -rotate-90">
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="44"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.25)"
+                          strokeWidth="4"
+                        />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="44"
+                          fill="none"
+                          stroke="rgb(122,167,143)"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeDasharray={2 * Math.PI * 44}
+                          strokeDashoffset={2 * Math.PI * 44 * (1 - holdProgress)}
+                          className="transition-[stroke-dashoffset] duration-100 ease-linear"
+                        />
+                      </svg>
+                    </span>
                   )}
 
                   {/* Live coaching cue */}
