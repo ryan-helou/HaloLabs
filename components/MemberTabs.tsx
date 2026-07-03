@@ -42,11 +42,14 @@ export default function MemberTabs({ tabs }: { tabs: MemberTab[] }) {
 
   return (
     <>
-      <div className="sticky top-20 z-30 border-y border-line bg-surface/90 backdrop-blur-md">
+      {/* Floating tab pill — same chrome language as the site header (rounded,
+          translucent, blurred, floating), so content scrolls behind both
+          uniformly instead of being cut off by a full-width band. */}
+      <div className="sticky top-16 z-30 px-4 py-3">
         <div
           role="tablist"
           aria-label="Report sections"
-          className="mx-auto flex max-w-[1300px] gap-1 overflow-x-auto px-4 sm:px-10"
+          className="mx-auto flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-line/80 bg-surface/80 p-1.5 shadow-float backdrop-blur-xl"
         >
           {tabs.map((t) => {
             const on = t.id === current.id;
@@ -57,14 +60,13 @@ export default function MemberTabs({ tabs }: { tabs: MemberTab[] }) {
                 role="tab"
                 aria-selected={on}
                 onClick={() => select(t.id)}
-                className={`relative shrink-0 whitespace-nowrap px-4 py-4 font-mono text-[11px] uppercase tracking-label transition-colors ${
-                  on ? "text-pine" : "text-ink-soft hover:text-ink"
+                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 font-mono text-[11px] uppercase tracking-label transition-colors ${
+                  on
+                    ? "bg-pine text-paper"
+                    : "text-ink-soft hover:bg-chip hover:text-ink"
                 }`}
               >
                 {t.label}
-                {on && (
-                  <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-pine" />
-                )}
               </button>
             );
           })}
