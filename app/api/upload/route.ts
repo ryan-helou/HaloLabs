@@ -13,6 +13,7 @@ import {
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { putPhoto, photoKey, storageConfigured } from "@/lib/storage";
+import { heicToJpeg } from "@/lib/heic-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -157,8 +158,9 @@ export async function POST(req: Request) {
 /**
  * Cloud upload for a DB-backed person. Images go to R2 (with a Photo row) when
  * configured; otherwise to local disk in dev (no Photo row — the analysis and
- * /api/photo both fall back to disk). HEIC isn't converted here (no macOS
- * `sips` in the cloud), so it's rejected with guidance.
+ * /api/photo both fall back to disk). HEIC/HEIF is converted to JPEG here via
+ * heic-convert (lib/heic-server), so iPhone photos are accepted even when the
+ * browser's pre-upload conversion fails or is bypassed.
  */
 async function cloudUpload(personId: string, files: File[]) {
   const saved: string[] = [];
@@ -168,15 +170,12 @@ async function cloudUpload(personId: string, files: File[]) {
 
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
-    const isImage = IMAGE_EXTS.has(ext); // jpg/png/webp only in the cloud
+    const isHeic = ext === ".heic" || ext === ".heif";
+    const isImage = IMAGE_EXTS.has(ext) || isHeic; // jpg/png/webp + heic (converted)
     const isVideo = VIDEO_EXTS.has(ext);
 
-    if (ext === ".heic" || ext === ".heif") {
-      errors.push(`${file.name}: please upload JPG or PNG (HEIC isn't supported online)`);
-      continue;
-    }
     if (!isImage && !isVideo) {
-      errors.push(`${file.name}: unsupported type (photos: jpg/png/webp, video: mp4/mov/webm)`);
+      errors.push(`${file.name}: unsupported type (photos: jpg/png/webp/heic, video: mp4/mov/webm)`);
       continue;
     }
     if (file.size > (isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
@@ -189,9 +188,22 @@ async function cloudUpload(personId: string, files: File[]) {
       continue;
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const name = safeName(file.name);
-    const contentType = contentTypeFor(ext);
+    let buffer = Buffer.from(await file.arrayBuffer());
+    let name = safeName(file.name);
+    let contentType = contentTypeFor(ext);
+
+    // iPhone HEIC → JPEG server-side. The browser tries first (lib/heic.ts);
+    // this catches failed/bypassed conversions so a HEIC upload never bounces.
+    if (isHeic) {
+      try {
+        buffer = await heicToJpeg(buffer);
+        name = name.replace(/\.hei[cf]$/i, ".jpg");
+        contentType = "image/jpeg";
+      } catch {
+        errors.push(`${file.name}: couldn't read this HEIC — try exporting it as JPG`);
+        continue;
+      }
+    }
 
     try {
       if (cloud) {
