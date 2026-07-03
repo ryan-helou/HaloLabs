@@ -29,6 +29,12 @@ const LOG = ".analysis.log";
 // out at 4 min; give it headroom for retries) and reaped on the next start.
 const STALE_JOB_MS = 10 * 60 * 1000;
 
+// Per-user cap on analyses started per hour. Each hosted scan spends real API
+// budget (STRATEGY flags zero-intent/abuse traffic as a bigger risk than tokens
+// themselves), so gate it — generous enough for real re-analysis, low enough to
+// bound burn. Failed jobs don't count, so error-retries aren't punished.
+const ANALYSIS_HOURLY_LIMIT = Number(process.env.ANALYSIS_HOURLY_LIMIT) || 12;
+
 interface StatusFile {
   state: "running";
   startedAt: string;
@@ -82,6 +88,26 @@ export async function POST(req: Request) {
           },
         });
       }
+
+      // Per-user hourly rate limit (counts real, non-failed scans).
+      const recent = await prisma.analysisJob.count({
+        where: {
+          userId: session.user.id,
+          status: { not: "FAILED" },
+          createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+        },
+      });
+      if (recent >= ANALYSIS_HOURLY_LIMIT) {
+        return NextResponse.json(
+          {
+            started: false,
+            error:
+              "You've run a lot of analyses this hour. Give it a little while and try again.",
+          },
+          { status: 429 }
+        );
+      }
+
       const jobId = await startAnalysis(session.user.id, id);
       return NextResponse.json({ started: true, jobId });
     }
