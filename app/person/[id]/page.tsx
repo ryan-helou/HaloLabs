@@ -119,6 +119,7 @@ export default async function PersonPage({
             <PlanBoard
               plan={plan}
               advice={person.advice}
+              personId={person.id}
               startNum={1}
               locked={locked}
             />
