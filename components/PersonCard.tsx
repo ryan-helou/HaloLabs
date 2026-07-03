@@ -3,6 +3,7 @@ import type { Person } from "@/lib/types";
 import { ADVICE_CATEGORIES } from "@/lib/types";
 import { isQuickWin } from "@/lib/badges";
 import { photoUrl } from "@/lib/photo";
+import DeletePersonButton from "./DeletePersonButton";
 
 const CATEGORY_LABEL: Record<string, string> = {
   hair: "Hair",
@@ -17,7 +18,14 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function PersonCard({ person }: { person: Person }) {
+export default function PersonCard({
+  person,
+  deletable = false,
+}: {
+  person: Person;
+  /** Show the delete affordance — only for DB-backed people the user owns. */
+  deletable?: boolean;
+}) {
   const thumb = person.photos[0];
   const totalIdeas = ADVICE_CATEGORIES.reduce(
     (n, c) => n + (person.advice[c]?.length ?? 0),
@@ -29,9 +37,10 @@ export default function PersonCard({ person }: { person: Person }) {
   );
 
   return (
+    <div className="group relative">
     <Link
       href={`/person/${encodeURIComponent(person.id)}`}
-      className="group flex gap-5 rounded-2xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-pine focus:outline-none focus:ring-2 focus:ring-pine"
+      className="flex gap-5 rounded-2xl border border-line bg-surface p-4 shadow-card transition-colors hover:border-pine focus:outline-none focus:ring-2 focus:ring-pine"
     >
       <div className="h-28 w-24 shrink-0 overflow-hidden rounded-xl bg-panel">
         {thumb ? (
@@ -80,5 +89,9 @@ export default function PersonCard({ person }: { person: Person }) {
         </div>
       </div>
     </Link>
+      {deletable && (
+        <DeletePersonButton personId={person.id} name={person.displayName} />
+      )}
+    </div>
   );
 }

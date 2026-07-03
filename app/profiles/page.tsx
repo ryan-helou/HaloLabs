@@ -2,8 +2,11 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { loadPeopleForRequest } from "@/lib/data";
 import { isUnlocked } from "@/lib/entitlement";
+import { auth } from "@/lib/auth";
+import { userHasPeople } from "@/lib/repo";
 import PersonCard from "@/components/PersonCard";
 import SignedInAs from "@/components/SignedInAs";
+import DangerZone from "@/components/DangerZone";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +19,16 @@ export default async function ProfilesPage({
 }: {
   searchParams: { [key: string]: string | string[] | undefined };
 }) {
-  const [people, unlocked] = await Promise.all([
+  const session = await auth();
+  const signedIn = Boolean(session?.user?.id);
+  const [people, unlocked, dbBacked] = await Promise.all([
     loadPeopleForRequest(),
     isUnlocked(),
+    signedIn ? userHasPeople(session!.user!.id) : Promise.resolve(false),
   ]);
+  // People are deletable only when they're the user's own DB records (not the
+  // local seed/dev fallback).
+  const deletable = dbBacked;
   const sorted = [...people].sort((a, b) =>
     a.displayName.localeCompare(b.displayName)
   );
@@ -105,10 +114,12 @@ export default async function ProfilesPage({
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {sorted.map((person) => (
-            <PersonCard key={person.id} person={person} />
+            <PersonCard key={person.id} person={person} deletable={deletable} />
           ))}
         </div>
       )}
+
+      {signedIn && <DangerZone />}
     </div>
   );
 }
