@@ -7,7 +7,6 @@ import { ADVICE_CATEGORIES } from "@/lib/types";
 import { isQuickWin } from "@/lib/badges";
 import { photoUrl } from "@/lib/photo";
 import { hasPlan } from "@/lib/plan";
-import LandmarkOverlay from "@/components/LandmarkOverlay";
 
 const CATEGORY_LABEL: Record<string, string> = {
   hair: "Hair",
@@ -63,18 +62,13 @@ export default function PersonHero({ person }: { person: Person }) {
   const photos = person.photos;
   const [selected, setSelected] = useState(0);
   const [lightbox, setLightbox] = useState(false);
-  // Drives the load choreography: bars grow + mesh fades once mounted, the
-  // "scan complete" stamp lands after the sweep finishes.
+  // Grows the readout bars in once on mount. No scan sweep or measurement mesh
+  // over the face — decoration that looks like measurement erodes trust
+  // (STRATEGY §3). The photo stays an honest photo.
   const [mounted, setMounted] = useState(false);
-  const [swept, setSwept] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const reduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    const t = setTimeout(() => setSwept(true), reduced ? 0 : 2500);
-    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -285,45 +279,12 @@ export default function PersonHero({ person }: { person: Person }) {
               <img
                 src={photoUrl(photos[selected])}
                 alt={`${person.displayName}, photo ${selected + 1}`}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                className="h-full w-full object-cover object-[center_30%] transition-transform duration-500 group-hover:scale-[1.02]"
               />
             )}
 
-            {/* Analysis theatre: the landmark motif fades in behind a one-time
-                scan sweep, then settles to a faint schematic. Ornamental — the
-                mesh is fixed, and nothing here implies a score. Its points
-                trace a FRONTAL face, so it only renders on the first photo
-                (the guided sequence's front shot); on angle shots it would sit
-                visibly misaligned and read as broken. */}
-            {selected === 0 && (
-              <LandmarkOverlay
-                className={`transition-opacity duration-1000 ${
-                  mounted ? "opacity-35" : "opacity-0"
-                } group-hover:opacity-55`}
-              />
-            )}
-            {!swept && (
-              <span
-                aria-hidden
-                className="scan-sweep pointer-events-none absolute inset-x-0"
-              >
-                <span className="block h-px bg-white shadow-[0_0_16px_3px_rgba(255,255,255,0.65)]" />
-                <span className="block h-10 bg-gradient-to-b from-white/25 to-transparent" />
-              </span>
-            )}
             <span className="panel-label left-4 top-4">
               Photo {selected + 1} / {photos.length}
-            </span>
-            <span
-              className={`panel-label right-4 top-4 flex items-center gap-1.5 transition-opacity duration-500 ${
-                swept ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 rounded-full bg-pine-deep/80"
-              />
-              Scan complete
             </span>
           </button>
 
