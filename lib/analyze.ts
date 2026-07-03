@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
+import sharp from "sharp";
 import { prisma } from "./db";
 import { getPhoto } from "./storage";
 import { anthropicConfigured } from "./env";
@@ -21,6 +22,14 @@ import type { Person } from "./types";
 
 const MODEL = process.env.ANALYSIS_MODEL || "claude-sonnet-5";
 const MAX_IMAGES = 8;
+
+// Longest-edge cap for photos sent to the vision API. Phone photos are often
+// 3000–4000px, which Claude bills as high-resolution (up to ~4784 image tokens
+// each — 8 of them dominate the per-scan input cost). 1568px is the classic
+// no-tiling sweet spot: at or below it an image costs ~1600 tokens while still
+// preserving the fine detail (skin, brows, birthmarks) that makes the analysis
+// credible. Override with ANALYSIS_IMAGE_MAX_EDGE.
+const IMAGE_MAX_EDGE = Number(process.env.ANALYSIS_IMAGE_MAX_EDGE) || 1568;
 
 export function analysisConfigured(): boolean {
   return anthropicConfigured();
@@ -190,6 +199,49 @@ function mediaType(ct: string | null | undefined): MediaType {
 }
 
 /**
+ * Shrink an oversized photo to IMAGE_MAX_EDGE on its longest edge and re-encode
+ * as JPEG, so full-resolution phone photos don't blow the per-scan vision-token
+ * budget. Best-effort: any decode/resize failure (or an animated GIF) falls back
+ * to the original bytes so the analysis still runs. Returns a JPEG block on the
+ * downsample path, else the original media type.
+ */
+async function toImageBlock(
+  buffer: Buffer,
+  ct: string | null | undefined
+): Promise<ImageBlock> {
+  try {
+    // GIFs may be animated; leave them untouched rather than flatten a frame.
+    if (mediaType(ct) === "image/gif") throw new Error("skip gif");
+    const img = sharp(buffer, { failOn: "none" });
+    const meta = await img.metadata();
+    const longest = Math.max(meta.width ?? 0, meta.height ?? 0);
+    // Only re-encode when it actually saves tokens (oversized, or a heavy PNG).
+    if (longest > IMAGE_MAX_EDGE || mediaType(ct) === "image/png") {
+      const out = await img
+        .rotate() // honor EXIF orientation before resizing
+        .resize({
+          width: IMAGE_MAX_EDGE,
+          height: IMAGE_MAX_EDGE,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      return {
+        type: "image",
+        source: { type: "base64", media_type: "image/jpeg", data: out.toString("base64") },
+      };
+    }
+  } catch {
+    /* fall through to the original bytes */
+  }
+  return {
+    type: "image",
+    source: { type: "base64", media_type: mediaType(ct), data: buffer.toString("base64") },
+  };
+}
+
+/**
  * Collect a person's images as base64 blocks, plus the photo references to
  * store on the result. Prefers R2 (Photo rows); falls back to local disk.
  */
@@ -210,14 +262,9 @@ async function collectImages(
       const obj = await getPhoto(row.r2Key);
       if (!obj) continue;
       photos.push(row.r2Key);
-      blocks.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: mediaType(row.contentType || obj.contentType),
-          data: Buffer.from(obj.body).toString("base64"),
-        },
-      });
+      blocks.push(
+        await toImageBlock(Buffer.from(obj.body), row.contentType || obj.contentType)
+      );
     }
     return { photos, blocks };
   }
@@ -238,14 +285,7 @@ async function collectImages(
       try {
         const data = await fs.readFile(path.join(dir, name));
         photos.push(`${personId}/${name}`);
-        blocks.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: mediaType(contentTypeFor(path.extname(name))),
-            data: data.toString("base64"),
-          },
-        });
+        blocks.push(await toImageBlock(data, contentTypeFor(path.extname(name))));
       } catch {
         /* skip unreadable file */
       }
@@ -255,12 +295,29 @@ async function collectImages(
   return { photos, blocks };
 }
 
-/** Rough Claude Sonnet pricing (USD) for cost tracking. */
-function estimateCostCents(inputTokens: number, outputTokens: number): number {
+/**
+ * Rough Claude Sonnet pricing (USD cents) for unit-economics tracking. Accounts
+ * for the four token classes separately: fresh input at base rate, cache writes
+ * at 1.25×, cache reads at 0.1× (the whole point of caching the rubric), and
+ * output. `inputTokens` from the API is already the uncached remainder, so the
+ * three input buckets don't double-count.
+ */
+function estimateCostCents(u: {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): number {
   const inPer1M = 300; // $3.00 / 1M input  → cents
   const outPer1M = 1500; // $15.00 / 1M output → cents
+  const cacheWrite = (u.cache_creation_input_tokens ?? 0) * (inPer1M * 1.25);
+  const cacheRead = (u.cache_read_input_tokens ?? 0) * (inPer1M * 0.1);
   return Math.round(
-    (inputTokens / 1_000_000) * inPer1M + (outputTokens / 1_000_000) * outPer1M
+    (u.input_tokens * inPer1M +
+      u.output_tokens * outPer1M +
+      cacheWrite +
+      cacheRead) /
+      1_000_000
   );
 }
 
@@ -304,11 +361,25 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
       ? `Onboarding answers (respect these):\n${JSON.stringify(profile, null, 2)}`
       : "No onboarding profile was provided — build from the photos alone and do not invent preferences.";
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // Bounded timeout + retries: this runs fire-and-forget, so a network hang
+    // must eventually reject (→ job FAILED) rather than pin the job at RUNNING
+    // and block the next start. 4 min is comfortably above a normal scan.
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      timeout: 4 * 60 * 1000,
+      maxRetries: 2,
+    });
     const res = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 8000,
-      system: SYSTEM_PROMPT,
+      // Cache the static prefix (tools render first, then system). One breakpoint
+      // on the last system block caches tools + system together, so every scan
+      // after the first reads that ~3k-token rubric at ~0.1× instead of full
+      // price. The photos live in `messages` after the breakpoint, so they never
+      // pollute the cache key. Verify via usage.cache_read_input_tokens below.
+      system: [
+        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
+      ],
       tools: [ANALYSIS_TOOL as unknown as Anthropic.Tool],
       tool_choice: { type: "tool", name: "emit_analysis" },
       messages: [
@@ -349,8 +420,17 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
       ...(payload.builtFor ? { builtFor: payload.builtFor } : {}),
     };
 
-    const inputTokens = res.usage.input_tokens;
-    const outputTokens = res.usage.output_tokens;
+    const usage = res.usage;
+    const inputTokens = usage.input_tokens;
+    const outputTokens = usage.output_tokens;
+
+    // Cache visibility: a warm rubric shows up as cache_read_input_tokens > 0.
+    // If it's persistently 0 across scans, a silent invalidator crept into the
+    // static prefix (see lib/analyze system[] / ANALYSIS_TOOL).
+    console.log(
+      `[analyze] job=${job.id} images=${photos.length} in=${inputTokens} out=${outputTokens} ` +
+        `cacheWrite=${usage.cache_creation_input_tokens ?? 0} cacheRead=${usage.cache_read_input_tokens ?? 0}`
+    );
 
     await prisma.$transaction([
       prisma.analysisResult.create({
@@ -368,7 +448,7 @@ export async function runAnalysisJob(jobId: string): Promise<void> {
           completedAt: new Date(),
           inputTokens,
           outputTokens,
-          costCents: estimateCostCents(inputTokens, outputTokens),
+          costCents: estimateCostCents(usage),
         },
       }),
     ]);

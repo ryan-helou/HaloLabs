@@ -45,7 +45,9 @@ export async function GET(
         status: 200,
         headers: {
           "Content-Type": obj.contentType,
-          "Cache-Control": "private, max-age=300",
+          // R2 keys are immutable (Date.now()-prefixed on upload), so a photo
+          // at a given path never changes — cache it hard on the client.
+          "Cache-Control": "private, max-age=3600, immutable",
         },
       });
     }

@@ -25,6 +25,10 @@ const STATUS = ".analysis.json";
 const EXIT = ".analysis.exit";
 const LOG = ".analysis.log";
 
+// A cloud job in flight longer than this is treated as dead (the worker times
+// out at 4 min; give it headroom for retries) and reaped on the next start.
+const STALE_JOB_MS = 10 * 60 * 1000;
+
 interface StatusFile {
   state: "running";
   startedAt: string;
@@ -57,11 +61,27 @@ export async function POST(req: Request) {
   if (session?.user?.id) {
     const person = await dbPersonFor(session.user.id, id);
     if (person) {
-      // Don't double-start if a job is already in flight.
+      // Don't double-start if a job is already in flight — but a job that has
+      // been in flight longer than the worker's own timeout is dead (crash,
+      // redeploy mid-run). Reap it so it can't wedge the person forever.
       const live = await prisma.analysisJob.findFirst({
         where: { personId: id, status: { in: ["QUEUED", "RUNNING"] } },
+        orderBy: { createdAt: "desc" },
       });
-      if (live) return NextResponse.json({ started: false, alreadyRunning: true });
+      if (live) {
+        const staleMs = Date.now() - live.createdAt.getTime();
+        if (staleMs < STALE_JOB_MS) {
+          return NextResponse.json({ started: false, alreadyRunning: true });
+        }
+        await prisma.analysisJob.update({
+          where: { id: live.id },
+          data: {
+            status: "FAILED",
+            error: "Timed out — the analysis worker didn't finish.",
+            completedAt: new Date(),
+          },
+        });
+      }
       const jobId = await startAnalysis(session.user.id, id);
       return NextResponse.json({ started: true, jobId });
     }
@@ -143,10 +163,14 @@ export async function GET(req: Request) {
       if (job.status === "FAILED") {
         return NextResponse.json({ state: "error", hint: job.error ?? "Analysis failed." });
       }
-      const elapsedSec = Math.round(
-        (Date.now() - job.createdAt.getTime()) / 1000
-      );
-      return NextResponse.json({ state: "running", elapsedSec });
+      const elapsedMs = Date.now() - job.createdAt.getTime();
+      if (elapsedMs > STALE_JOB_MS) {
+        return NextResponse.json({
+          state: "error",
+          hint: "The analysis didn't finish in time. Start it again from the photos step.",
+        });
+      }
+      return NextResponse.json({ state: "running", elapsedSec: Math.round(elapsedMs / 1000) });
     }
   }
 
