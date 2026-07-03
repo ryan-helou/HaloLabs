@@ -12,6 +12,7 @@ import HaloGlance from "@/components/HaloGlance";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import PaywallBar from "@/components/PaywallBar";
+import UnlockCard from "@/components/UnlockCard";
 import { ProgressProvider } from "@/components/ProgressProvider";
 import type { Observations } from "@/lib/types";
 
@@ -166,6 +167,11 @@ export default async function PersonPage({
         </div>
       </ProgressProvider>
 
+      {/* The value section — what membership opens. Only while locked. */}
+      {locked && totalSuggestions > 0 && (
+        <UnlockCard totalCount={totalSuggestions} />
+      )}
+
       {/* Wellbeing note — quiet, always present. */}
       <p className="mx-auto max-w-[1300px] px-6 py-10 text-xs leading-relaxed text-ink-soft sm:px-10">
         A reminder from HaloLabs: this plan describes options, not obligations —
@@ -177,7 +183,7 @@ export default async function PersonPage({
 
       {/* Pressure UI — only while locked. The button is stubbed until Stripe. */}
       {locked && totalSuggestions > 0 && (
-        <PaywallBar unlockedCount={1} totalCount={totalSuggestions} />
+        <PaywallBar totalCount={totalSuggestions} />
       )}
     </div>
   );
