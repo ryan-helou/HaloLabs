@@ -137,6 +137,7 @@ export default function CaptureFlow() {
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisState>({ phase: "idle" });
+  const [age18, setAge18] = useState(false);
   const [qualityNotes, setQualityNotes] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -282,7 +283,7 @@ export default function CaptureFlow() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id, ageConfirmed18Plus: age18 }),
       });
       const data = await res.json();
       if (data.manual) {
@@ -415,7 +416,7 @@ export default function CaptureFlow() {
   /* ------------------------------------------ capture screen */
   return (
     <div className="mx-auto max-w-3xl">
-      <p className="eyebrow">Step 2 of 3 · Photos</p>
+      <p className="eyebrow">Free scan · Your photos</p>
       <h1 className="mt-2 font-display text-3xl font-medium tracking-tight text-ink sm:text-4xl">
         Add your photos
       </h1>
@@ -677,23 +678,45 @@ export default function CaptureFlow() {
         </div>
       )}
 
+      {/* 18+ confirmation — the policy gate, collected here right before the
+          run rather than up front, so the funnel stays frictionless. */}
+      <label className="mt-8 flex cursor-pointer items-start gap-3 rounded-2xl border border-line bg-surface p-4 shadow-card">
+        <input
+          type="checkbox"
+          checked={age18}
+          onChange={(e) => setAge18(e.target.checked)}
+          className="mt-0.5 accent-[#3F5B6B]"
+        />
+        <span className="text-sm leading-relaxed text-ink">
+          I&apos;m 18 or older.
+          <span className="mt-0.5 block text-xs text-ink-soft">
+            HaloLabs doesn&apos;t analyze anyone under 18 — no exceptions.
+          </span>
+        </span>
+      </label>
+
       {/* Begin */}
-      <div className="mt-8 flex items-center justify-between border-t border-line pt-6">
+      <div className="mt-6 flex items-center justify-between border-t border-line pt-6">
         <Link
-          href="/start"
+          href="/"
           className="rounded-full px-5 py-2.5 text-sm font-medium text-ink-soft transition-colors hover:text-ink"
         >
-          ← Edit answers
+          ← Home
         </Link>
         <button
           type="button"
-          disabled={!enough || uploading}
+          disabled={!enough || !age18 || uploading}
           onClick={beginAnalysis}
           className="rounded-full bg-pine px-7 py-3.5 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep disabled:cursor-not-allowed disabled:opacity-40"
         >
           Begin my analysis →
         </button>
       </div>
+      {enough && !age18 && (
+        <p className="mt-2 text-right text-xs text-ink-soft">
+          Confirm you&apos;re 18+ to run the analysis.
+        </p>
+      )}
       {status?.analyzed && (
         <p className="mt-3 text-right text-xs text-ink-soft">
           This profile was analyzed before — running again replaces the old

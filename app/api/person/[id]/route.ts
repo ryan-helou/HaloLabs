@@ -84,6 +84,51 @@ export async function GET(
 }
 
 /**
+ * Update a person's onboarding profile — the "fill up your information" step
+ * that runs after purchase. Storing it BEFORE the full-plan job kicks off means
+ * the paid plan is personalized to these answers. Owner-only.
+ */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Please sign in." }, { status: 401 });
+  }
+  const id = decodeURIComponent((await params).id);
+
+  let body: { profile?: unknown; displayName?: unknown };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const person = await prisma.person.findFirst({
+    where: { userId: session.user.id, id },
+  });
+  if (!person) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  const displayName =
+    typeof body.displayName === "string" && body.displayName.trim()
+      ? body.displayName.trim().slice(0, 80)
+      : undefined;
+
+  await prisma.person.update({
+    where: { id: person.id },
+    data: {
+      ...(body.profile !== undefined ? { profile: body.profile as object } : {}),
+      ...(displayName ? { displayName } : {}),
+    },
+  });
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
  * Delete a person the signed-in user owns — their photos (R2), check-offs, and
  * analysis records. This is what makes the privacy page's "delete individual
  * photos" promise real. Only DB-backed people (real accounts) are deletable;

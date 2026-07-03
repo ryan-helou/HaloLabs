@@ -64,7 +64,7 @@ export default async function Header() {
                 Log in
               </Link>
               <Link
-                href="/signup?callbackUrl=/start"
+                href="/start"
                 className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition-colors hover:bg-pine-deep"
               >
                 Get my free scan

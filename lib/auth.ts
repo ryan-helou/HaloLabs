@@ -1,9 +1,13 @@
+import { randomUUID } from "node:crypto";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/lib/auth.config";
+
+/** Synthetic email domain that marks a passwordless guest account. */
+export const GUEST_EMAIL_DOMAIN = "guest.halolabs";
 
 /**
  * Full Auth.js instance (Node runtime). Email + password today via the
@@ -43,6 +47,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return { id: user.id, email: user.email, name: user.name };
       },
     }),
+    // Anonymous "guest" sign-in — the frictionless free-scan entry. It creates a
+    // fresh passwordless account so the scan (Person, photos, analysis job) can
+    // persist and be analyzed in the cloud without an up-front signup. Guests
+    // are identified by a null passwordHash + the @guest.halolabs email; when
+    // they pay and set a password (/api/auth/claim) the SAME row becomes a real
+    // account, so the scan they already made and paid for stays theirs.
+    Credentials({
+      id: "guest",
+      name: "Guest",
+      credentials: {},
+      async authorize() {
+        const user = await prisma.user.create({
+          data: { email: `guest_${randomUUID()}@${GUEST_EMAIL_DOMAIN}` },
+        });
+        return { id: user.id, email: user.email, name: null };
+      },
+    }),
   ],
   callbacks: {
     ...authConfig.callbacks,
@@ -60,9 +81,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = uid;
         const u = await prisma.user.findUnique({
           where: { id: uid },
-          select: { subscriptionStatus: true },
+          select: { subscriptionStatus: true, passwordHash: true },
         });
         session.user.subscriptionStatus = u?.subscriptionStatus ?? "inactive";
+        // A guest is a passwordless account. Read fresh (like the entitlement)
+        // so claiming an account (setting a password) flips this to false on the
+        // very next request, with no re-login.
+        session.user.isGuest = !u?.passwordHash;
       }
       return session;
     },

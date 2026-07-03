@@ -150,7 +150,7 @@ function Frame({
 function StartCta({ label = "Get my free scan" }: { label?: string }) {
   return (
     <a
-      href="/signup?callbackUrl=/start"
+      href="/start"
       className="inline-flex items-center gap-1.5 rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep"
     >
       {label}
@@ -182,7 +182,7 @@ export default function HomePage() {
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <a
-                href="/signup?callbackUrl=/start"
+                href="/start"
                 className="rounded-full bg-ink px-6 py-3 text-[15px] font-medium text-paper shadow-float transition-colors hover:bg-pine-deep"
               >
                 Get my free scan

@@ -33,6 +33,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // ── Provisional (free-scan entry) ─────────────────────────────────────────
+  // The frictionless funnel creates the scan up front with no name and no
+  // questionnaire, so we can go straight to photos. The 18+ gate moves to the
+  // analysis step (/api/analyze), which is where a real run is committed.
+  if (body.provisional === true) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Please start from the beginning." }, { status: 401 });
+    }
+    const person = await prisma.person.create({
+      data: {
+        userId: session.user.id,
+        displayName: clip(body.displayName, 80) || "Your scan",
+      },
+    });
+    return NextResponse.json({ id: person.id, provisional: true });
+  }
+
   if (body.ageConfirmed18Plus !== true) {
     return NextResponse.json(
       { error: "HaloLabs is 18+ only. The analysis cannot run without this confirmation." },

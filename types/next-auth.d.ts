@@ -7,6 +7,8 @@ declare module "next-auth" {
       id: string;
       /** Entitlement flag the paywall reads ("active" = unlocked). */
       subscriptionStatus: string;
+      /** True for a passwordless guest account (free-scan entry, not yet claimed). */
+      isGuest: boolean;
     } & DefaultSession["user"];
   }
 }

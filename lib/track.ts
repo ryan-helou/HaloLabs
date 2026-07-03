@@ -11,7 +11,8 @@ export type TrackEvent =
   | "signup"
   | "scan_started"
   | "checkout_started"
-  | "membership_active";
+  | "membership_active"
+  | "account_claimed";
 
 declare global {
   interface Window {
