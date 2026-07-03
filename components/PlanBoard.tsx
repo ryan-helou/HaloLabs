@@ -1,15 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type {
-  Advice,
-  Plan,
-  ProgressEntry,
-  RoutineSlot,
-} from "@/lib/types";
+import { useMemo } from "react";
+import type { Advice, Plan, RoutineSlot } from "@/lib/types";
 import { CATEGORY_META } from "@/lib/categories";
 import { flattenAdvice } from "@/lib/plan";
 import ReportSection from "./ReportSection";
+import { useProgress } from "./ProgressProvider";
 
 /**
  * Acts [04]–[06] of the report: the actionable plan.
@@ -30,24 +26,19 @@ const SLOT_META: Record<RoutineSlot, { title: string; sub: string; icon: string 
 };
 
 export default function PlanBoard({
-  personId,
   plan,
   advice,
-  initialProgress,
   startNum = 4,
   locked = false,
 }: {
-  personId: string;
   plan: Plan;
   advice: Advice;
-  initialProgress: Record<string, ProgressEntry>;
   /** First section number; subsequent rendered sections count up from here. */
   startNum?: number;
   /** Blur the routine/roadmap/shopping specifics behind the paywall. */
   locked?: boolean;
 }) {
-  const [progress, setProgress] =
-    useState<Record<string, ProgressEntry>>(initialProgress);
+  const { isDone, toggle } = useProgress();
 
   const byId = useMemo(() => {
     const map = new Map<string, { title: string; category: string; anchor: string }>();
@@ -61,25 +52,6 @@ export default function PlanBoard({
     return map;
   }, [advice]);
 
-  async function toggle(suggestionId: string) {
-    const next = !(progress[suggestionId]?.done ?? false);
-    const prev = progress;
-    setProgress({
-      ...progress,
-      [suggestionId]: { done: next, doneAt: new Date().toISOString() },
-    });
-    try {
-      const res = await fetch("/api/progress", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personId, suggestionId, done: next }),
-      });
-      if (!res.ok) setProgress(prev);
-    } catch {
-      setProgress(prev);
-    }
-  }
-
   const routineBySlot = (slot: RoutineSlot) =>
     (plan.routine ?? []).filter((r) => r.slot === slot);
 
@@ -88,7 +60,7 @@ export default function PlanBoard({
   const phases = plan.phases.filter((p) => p.suggestionIds.length > 0);
   const totalPlanned = phases.reduce((n, p) => n + p.suggestionIds.length, 0);
   const totalDone = phases.reduce(
-    (n, p) => n + p.suggestionIds.filter((sid) => progress[sid]?.done).length,
+    (n, p) => n + p.suggestionIds.filter((sid) => isDone(sid)).length,
     0
   );
   const totalPct = totalPlanned ? Math.round((totalDone / totalPlanned) * 100) : 0;
@@ -189,7 +161,7 @@ export default function PlanBoard({
         >
           <div className="grid divide-y divide-line lg:grid-flow-col lg:auto-cols-fr lg:divide-x lg:divide-y-0">
             {phases.map((phase) => {
-              const done = phase.suggestionIds.filter((sid) => progress[sid]?.done).length;
+              const done = phase.suggestionIds.filter((sid) => isDone(sid)).length;
               return (
                 <div key={phase.number} className="px-6 py-8 sm:px-8">
                   <div className="flex items-baseline justify-between gap-3">
@@ -207,18 +179,18 @@ export default function PlanBoard({
                   <ul className="mt-6 divide-y divide-line border-t border-line">
                     {phase.suggestionIds.map((sid) => {
                       const info = byId.get(sid);
-                      const isDone = progress[sid]?.done ?? false;
+                      const done = isDone(sid);
                       if (!info) return null;
                       return (
                         <li key={sid} className="flex items-center gap-3 py-3">
                           <button
                             type="button"
                             role="checkbox"
-                            aria-checked={isDone}
-                            aria-label={`Mark "${info.title}" ${isDone ? "not done" : "done"}`}
+                            aria-checked={done}
+                            aria-label={`Mark "${info.title}" ${done ? "not done" : "done"}`}
                             onClick={() => toggle(sid)}
                             className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                              isDone
+                              done
                                 ? "border-pine bg-pine text-paper"
                                 : "border-line bg-paper text-transparent hover:border-pine/50"
                             }`}
@@ -229,7 +201,7 @@ export default function PlanBoard({
                             <a
                               href={`#${info.anchor}`}
                               className={`block text-sm transition-colors hover:text-pine ${
-                                isDone
+                                done
                                   ? "text-ink-soft line-through decoration-line"
                                   : "text-ink"
                               }`}
@@ -261,6 +233,15 @@ export default function PlanBoard({
           blurb="Examples, not endorsements — no affiliate links, ever. Any equivalent with the same active or spec works."
           lockedContent={locked}
           lockNote="Your shopping list"
+          collapsible={!locked}
+          defaultOpen={false}
+          collapsedHint={
+            plan.shoppingList.length > 0
+              ? `${plan.shoppingList.length} product ${
+                  plan.shoppingList.length === 1 ? "category" : "categories"
+                } to buy, with price bands and re-photo checkpoints. `
+              : "Your re-photo checkpoints. "
+          }
         >
           <div className="grid divide-y divide-line lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:divide-x lg:divide-y-0">
             {plan.shoppingList.length > 0 && (

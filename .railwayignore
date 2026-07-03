@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+out
+*.tsbuildinfo
+lib/generated
+.env
+.env.*
+.DS_Store
+npm-debug.log*
