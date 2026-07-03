@@ -13,9 +13,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { path: string[] } }
+  { params }: { params: Promise<{ path: string[] }> }
 ) {
-  const relative = (params.path ?? []).map((seg) => decodeURIComponent(seg)).join("/");
+  const relative = ((await params).path ?? []).map((seg) => decodeURIComponent(seg)).join("/");
 
   // 1) Local disk (sandboxed). Serve if the file actually exists there.
   const abs = resolvePhotoPath(relative);

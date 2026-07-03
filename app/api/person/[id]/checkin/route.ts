@@ -30,8 +30,8 @@ function safeName(original: string): string {
  * `progress/<ts>/` prefix so they group by day and never touch the baseline
  * analysis photos. Members only — progress tracking is part of the plan.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  const id = decodeURIComponent(params.id);
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = decodeURIComponent((await params).id);
 
   const session = await auth();
   if (!session?.user?.id) {

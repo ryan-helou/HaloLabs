@@ -25,9 +25,10 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }): Promise<Metadata> {
-  const person = await loadPerson(decodeURIComponent(params.id));
+  const { id } = await params;
+  const person = await loadPerson(decodeURIComponent(id));
   return { title: person ? `${person.displayName} · HaloLabs` : "HaloLabs" };
 }
 
@@ -42,10 +43,12 @@ export default async function PersonPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const id = decodeURIComponent(params.id);
+  const { id: rawId } = await params;
+  const sp = await searchParams;
+  const id = decodeURIComponent(rawId);
   const person = await loadPerson(id);
   if (!person) notFound();
 
@@ -54,7 +57,7 @@ export default async function PersonPage({
   // the rest. It now reads the signed-in user's subscriptionStatus (Phase 2);
   // Stripe's webhook flips that flag in Phase 3. `?unlocked=1` stays as a
   // preview override for tuning what's free vs. locked.
-  const unlocked = (await isUnlocked()) || searchParams?.unlocked === "1";
+  const unlocked = (await isUnlocked()) || sp?.unlocked === "1";
   const locked = !unlocked;
 
   // The single suggestion shown in full on a locked plan, chosen deterministically
