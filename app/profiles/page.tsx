@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { loadResults } from "@/lib/data";
+import { loadPeopleForRequest } from "@/lib/data";
 import PersonCard from "@/components/PersonCard";
 import SignedInAs from "@/components/SignedInAs";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilesPage() {
-  const { people } = await loadResults();
+  const people = await loadPeopleForRequest();
   const sorted = [...people].sort((a, b) =>
     a.displayName.localeCompare(b.displayName)
   );

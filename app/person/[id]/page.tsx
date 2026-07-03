@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { loadPerson } from "@/lib/data";
 import { loadProgress } from "@/lib/progress";
 import { hasPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
+import { isUnlocked } from "@/lib/entitlement";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
@@ -43,12 +44,12 @@ export default async function PersonPage({
   const person = await loadPerson(id);
   if (!person) notFound();
 
-  // Entitlement (Phase 1 stub). `unlocked` gates the blur paywall: unlocked
-  // shows the whole plan, locked reveals act [01] observations + one free
-  // suggestion and blurs the rest. `?unlocked=1` previews the paid view while
-  // we tune what's free. Phase 4 replaces this with the Stripe
-  // subscriptionStatus flag on the user record — nothing else here changes.
-  const unlocked = searchParams?.unlocked === "1";
+  // Entitlement. `unlocked` gates the blur paywall: unlocked shows the whole
+  // plan, locked reveals act [01] observations + one free suggestion and blurs
+  // the rest. It now reads the signed-in user's subscriptionStatus (Phase 2);
+  // Stripe's webhook flips that flag in Phase 3. `?unlocked=1` stays as a
+  // preview override for tuning what's free vs. locked.
+  const unlocked = (await isUnlocked()) || searchParams?.unlocked === "1";
   const locked = !unlocked;
 
   // The single suggestion shown in full on a locked plan, chosen deterministically

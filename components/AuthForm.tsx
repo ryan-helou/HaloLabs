@@ -41,6 +41,7 @@ export default function AuthForm({
       if (isSignup) {
         if (!age) {
           setError("Please confirm you are 18 or older.");
+          setLoading(false);
           return;
         }
         const res = await fetch("/api/auth/register", {
@@ -56,6 +57,7 @@ export default function AuthForm({
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           setError(data.error || "Could not create your account.");
+          setLoading(false);
           return;
         }
       }
@@ -71,13 +73,14 @@ export default function AuthForm({
             ? "Account created, but sign-in failed. Try logging in."
             : "Wrong email or password."
         );
+        setLoading(false);
         return;
       }
-      router.push(callbackUrl);
-      router.refresh();
+      // Hard navigation so the new session cookie is picked up by the server
+      // components on the destination (a soft push can race the cookie write).
+      window.location.assign(callbackUrl);
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
