@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { track } from "@/lib/track";
 
 /**
  * Real email + password auth (Auth.js Credentials). One component, two modes:
@@ -76,6 +77,7 @@ export default function AuthForm({
         setLoading(false);
         return;
       }
+      if (isSignup) track("signup");
       // Hard navigation so the new session cookie is picked up by the server
       // components on the destination (a soft push can race the cookie write).
       window.location.assign(callbackUrl);

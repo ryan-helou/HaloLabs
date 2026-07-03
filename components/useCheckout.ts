@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "@/lib/track";
 
 /**
  * Shared Stripe-Checkout starter used by both the sticky PaywallBar and the
@@ -15,6 +16,7 @@ export function useCheckout() {
   async function startCheckout() {
     setLoading(true);
     setError(null);
+    track("checkout_started");
     try {
       const returnTo =
         typeof window !== "undefined" ? window.location.pathname : "/profiles";
