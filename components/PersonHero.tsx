@@ -291,12 +291,17 @@ export default function PersonHero({ person }: { person: Person }) {
 
             {/* Analysis theatre: the landmark motif fades in behind a one-time
                 scan sweep, then settles to a faint schematic. Ornamental — the
-                mesh is fixed, and nothing here implies a score. */}
-            <LandmarkOverlay
-              className={`transition-opacity duration-1000 ${
-                mounted ? "opacity-35" : "opacity-0"
-              } group-hover:opacity-55`}
-            />
+                mesh is fixed, and nothing here implies a score. Its points
+                trace a FRONTAL face, so it only renders on the first photo
+                (the guided sequence's front shot); on angle shots it would sit
+                visibly misaligned and read as broken. */}
+            {selected === 0 && (
+              <LandmarkOverlay
+                className={`transition-opacity duration-1000 ${
+                  mounted ? "opacity-35" : "opacity-0"
+                } group-hover:opacity-55`}
+              />
+            )}
             {!swept && (
               <span
                 aria-hidden
