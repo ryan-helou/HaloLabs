@@ -281,6 +281,7 @@ export default function CaptureFlow() {
       });
       const data = await res.json();
       if (data.manual) {
+        // Local-only: the on-machine spawn failed. Show the Claude Code fallback.
         setAnalysis({
           phase: "error",
           hint: "Couldn't launch the local analyzer automatically.",
@@ -288,10 +289,17 @@ export default function CaptureFlow() {
       } else if (data.started || data.alreadyRunning) {
         setAnalysis({ phase: "running", elapsedSec: 0 });
       } else {
-        setAnalysis({ phase: "error", hint: data.error ?? "" });
+        // Cloud-side error (rate limited, not configured, …) — surface inline
+        // and stay put; the Claude Code fallback doesn't apply here.
+        toast({
+          kind: "error",
+          message: data.error || "Couldn't start the analysis. Please try again.",
+        });
+        setAnalysis({ phase: "idle" });
       }
     } catch {
-      setAnalysis({ phase: "error", hint: "Request failed." });
+      toast({ kind: "error", message: "Couldn't reach the server. Please try again." });
+      setAnalysis({ phase: "idle" });
     }
   }
 
