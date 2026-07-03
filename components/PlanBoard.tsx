@@ -28,11 +28,14 @@ const SLOT_META: Record<RoutineSlot, { title: string; sub: string; icon: string 
 export default function PlanBoard({
   plan,
   advice,
+  personId,
   startNum = 4,
   locked = false,
 }: {
   plan: Plan;
   advice: Advice;
+  /** For the "add to calendar" export link on an unlocked routine. */
+  personId: string;
   /** First section number; subsequent rendered sections count up from here. */
   startNum?: number;
   /** Blur the routine/roadmap/shopping specifics behind the paywall. */
@@ -87,6 +90,19 @@ export default function PlanBoard({
           blurb="The repeating part of the plan, in the order to apply things. Introduce one new product at a time — give each two weeks before adding the next."
           lockedContent={locked}
           lockNote="Your full routine"
+          rail={
+            !locked ? (
+              <a
+                href={`/api/person/${encodeURIComponent(personId)}/routine.ics`}
+                className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+                </svg>
+                Add to calendar
+              </a>
+            ) : undefined
+          }
         >
           <div className="grid divide-y divide-line md:grid-flow-col md:auto-cols-fr md:divide-x md:divide-y-0">
             {(Object.keys(SLOT_META) as RoutineSlot[]).map((slot) => {
