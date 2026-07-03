@@ -6,7 +6,12 @@
  *
  * Content renders edge-to-edge so acts can run their own divided grids
  * (divide-x columns, divide-y rows) out to the frame; pad inside if needed.
+ *
+ * When `lockedContent` is set, the header/numeral/blurb rail stays sharp and
+ * only the content column is blurred behind the paywall (see LockedSection).
  */
+import LockedSection from "./LockedSection";
+
 export default function ReportSection({
   num,
   titleA,
@@ -15,6 +20,8 @@ export default function ReportSection({
   rail,
   id,
   children,
+  lockedContent = false,
+  lockNote,
 }: {
   num: string;
   titleA: string;
@@ -24,6 +31,10 @@ export default function ReportSection({
   rail?: React.ReactNode;
   id?: string;
   children: React.ReactNode;
+  /** Blur + disable the content column behind the paywall. */
+  lockedContent?: boolean;
+  /** Short line for the lock chip when locked. */
+  lockNote?: string;
 }) {
   return (
     <section id={id} className="scroll-mt-24 border-t border-line">
@@ -46,7 +57,13 @@ export default function ReportSection({
             {rail && <div className="mt-8">{rail}</div>}
           </div>
         </div>
-        <div className="min-w-0">{children}</div>
+        <div className="min-w-0">
+          {lockedContent ? (
+            <LockedSection note={lockNote}>{children}</LockedSection>
+          ) : (
+            children
+          )}
+        </div>
       </div>
     </section>
   );

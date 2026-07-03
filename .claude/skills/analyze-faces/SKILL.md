@@ -123,7 +123,9 @@ button (`/api/analyze` spawns `claude -p "Run the analyze-faces skill with
         `products` (where buying is involved: "Category — e.g. Brand,
         ~$cost/mo", matched to their budget), `timeline`, `frequency`,
         `evidence`, `phase` (1/2/3), and `routineSlot` when the suggestion is
-        a repeating routine step.
+        a repeating routine step. Set `freeReveal: true` on exactly ONE
+        suggestion — the single high-impact, low-effort item shown in full on
+        the free (locked) plan; pick the most compelling quick win.
       - `plan`:
         - `summary`: 3–5 sentences. What the plan prioritizes and why,
           quoting their goals/constraints when available.
@@ -221,6 +223,7 @@ Suggestion object:
   "evidence": "strong|moderate|emerging",
   "phase": 1,
   "routineSlot": "pm",
+  "freeReveal": true,
   "image": "optional: <id>/refs/example.jpg"
 }
 ```

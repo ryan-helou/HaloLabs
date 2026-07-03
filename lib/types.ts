@@ -73,6 +73,13 @@ export interface Suggestion {
   /** Routine slot if this is a repeating routine step. (v2) */
   routineSlot?: RoutineSlot;
   /**
+   * Marks this as the single suggestion shown in full on the free (locked)
+   * plan — the teaser the paywall reveals. The skill should flag exactly one
+   * high-impact / low-effort item. If none is flagged, the viewer picks the
+   * best candidate deterministically, so this stays optional. (v2)
+   */
+  freeReveal?: boolean;
+  /**
    * Optional "after" preview: a relative path under /data/people/<id>/ to an
    * image illustrating this change (e.g. an AI-generated render). Rendered as a
    * thumbnail on the suggestion when present; omitted otherwise.
