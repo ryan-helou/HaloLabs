@@ -145,11 +145,9 @@ export default function CaptureFlow() {
   const nativeCameraInput = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Desktop/laptop with a webcam → in-page guided capture. Touch devices →
-  // the native camera app via <input capture>, which shoots at full quality.
-  const coarsePointer =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(pointer: coarse)").matches;
+  // Any device with a usable camera → in-page guided capture with live
+  // coaching. Devices without getUserMedia fall back to the native camera app
+  // via <input capture>, which shoots at full quality.
   useEffect(() => {
     setWebcamCapable(
       typeof navigator !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia)
@@ -322,7 +320,10 @@ export default function CaptureFlow() {
   }
 
   function openCamera() {
-    if (webcamCapable && !coarsePointer) setCameraOpen(true);
+    // Guided in-page capture on any device with a usable camera (desktop AND
+    // phones) — getUserMedia + on-device coaching works on mobile browsers.
+    // The native camera input stays as the fallback if it can't open.
+    if (webcamCapable) setCameraOpen(true);
     else nativeCameraInput.current?.click();
   }
 
@@ -520,8 +521,8 @@ export default function CaptureFlow() {
           Take the photos now
         </button>
         <p className="mt-3 text-sm text-ink">
-          {webcamCapable && !coarsePointer
-            ? "Guided webcam session — it walks you through each shot."
+          {webcamCapable
+            ? "Guided session — a live on-screen coach lines up each shot and captures when you're set."
             : "Opens your camera for each shot."}
         </p>
         <p className="mt-4 border-t border-line pt-4 text-sm text-ink-soft">
@@ -569,6 +570,11 @@ export default function CaptureFlow() {
           )}
           onSave={saveCameraShot}
           onClose={() => setCameraOpen(false)}
+          onCameraError={() => {
+            // In-page camera couldn't open — fall back to the native camera app.
+            setCameraOpen(false);
+            nativeCameraInput.current?.click();
+          }}
         />
       )}
 
