@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { loadPerson } from "@/lib/data";
 import { loadProgressForPerson } from "@/lib/progress";
+import { loadCheckins } from "@/lib/checkins";
 import { hasPlan, hasFullPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
 import { isUnlocked } from "@/lib/entitlement";
 import PersonHero from "@/components/PersonHero";
@@ -13,6 +14,7 @@ import LockedScanHook from "@/components/LockedScanHook";
 import FullPlanBuilder from "@/components/FullPlanBuilder";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
+import ProgressTimeline from "@/components/ProgressTimeline";
 import PaywallBar from "@/components/PaywallBar";
 import UnlockCard from "@/components/UnlockCard";
 import { ProgressProvider } from "@/components/ProgressProvider";
@@ -97,6 +99,9 @@ export default async function PersonPage({
   // until it's ready, then the page refreshes into the full plan.
   const building = !locked && planReady && !hasFullPlan(person);
 
+  // Progress check-ins are a member feature (part of the plan you paid for).
+  const checkins = !locked && !building ? await loadCheckins(person.id) : [];
+
   return (
     // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
     // page — the report runs in Qoves-style framed bands, not floating cards.
@@ -127,6 +132,17 @@ export default async function PersonPage({
           )
         ) : (
           <PlanOverview person={person} />
+        )}
+
+        {/* Progress loop — members re-photo every ~2 weeks; before/after +
+            history. Sits right under the digest as the "keep coming back". */}
+        {!locked && (
+          <ProgressTimeline
+            personId={person.id}
+            baselinePhoto={person.photos[0]}
+            baselineAt={person.analyzedAt}
+            checkins={checkins}
+          />
         )}
 
         {/* The report body: numbered acts stacked as one framed document.

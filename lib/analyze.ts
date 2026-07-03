@@ -339,7 +339,9 @@ async function collectImages(
   const blocks: ImageBlock[] = [];
 
   const rows = await prisma.photo.findMany({
-    where: { personId },
+    // Baseline analysis photos only — progress check-in photos (keyed under
+    // .../progress/...) are for the timeline, not the analysis.
+    where: { personId, NOT: { r2Key: { contains: "/progress/" } } },
     orderBy: { uploadedAt: "asc" },
     take: MAX_IMAGES,
   });
