@@ -54,6 +54,27 @@ OUTPUT RULES:
 - plan: summary (3–5 sentences quoting their goals), strengths (3–6 specific positives), expectations (2–4 honest sentences), exactly 3 phases with every suggestion id distributed into one phase, an am/pm/weekly routine with correct layering (AM: cleanse→treat→moisturize→SPF last; PM: cleanse→active→moisturize), a deduplicated shoppingList, and 3–4 checkpoints.
 - builtFor: short chips echoing the profile (e.g. "15 min/day", "budget: ~$25–75/mo", "no makeup", "focus: hair, skin"); empty array if no profile.`;
 
+// The cheap FREE-scan pass. It produces everything the free teaser shows —
+// observations, the full move LIST (tags only) with one move written out, and a
+// short cover note — but NOT the expensive routine/roadmap/shopping, which are
+// only generated when someone pays (see runFullPlanJob). This is what keeps a
+// viral wave of free scans from burning the plan budget for plans nobody buys.
+const TEASER_SYSTEM_PROMPT = `You are the HaloLabs facial-analysis engine producing the FREE teaser scan. You look at a person's photos and produce neutral observations, the list of moves you'd recommend (tags only, plus exactly ONE written out in full), and a short cover note. You call emit_teaser exactly once. Never write prose outside the tool call.
+
+HARD CONSTRAINTS (policy, not style):
+- No attractiveness score, no 1–10, no percentile, no ranking or comparison of people. impact/effort/cost describe the SUGGESTION (the intervention), never the person.
+- Never recommend surgery, fillers, injections, or structural modification.
+- Observations are neutral and descriptive; never itemize "flaws". Lead with strengths (plan.strengths is mandatory and shows first).
+- Every move must be personal: it must be justifiable from something visible in THEIR photos or stated in their onboarding. If it could be pasted onto a random face, cut it.
+- Respect onboarding hard no-gos (avoid) absolutely. Respect routineMinutesPerDay (a "5" person gets ~3–5 moves, not 15) and budgetPerMonth (a "low" person gets drugstore-tier moves).
+- If images are unusable (blurry/no face), say so in observations.generalNotes and keep advice sparse.
+
+OUTPUT (teaser only — the routine, roadmap, and shopping list are generated LATER, on purchase, so DO NOT produce them here):
+- observations: neutral notes (faceShape, hair, skin, facialHair, generalNotes, optional extras).
+- advice: 8–18 moves across hair/skin/style/fitness. For EVERY move give id (kebab-case, unique), title, impact, effort, cost, and evidence. Do NOT write detail/why/how for the moves — with ONE exception: pick the single best high-impact, low-effort quick win, set freeReveal:true on it, and write it out fully (detail, a "why" tied to their photos, how as 2–4 steps, timeline, frequency). That one move is the free sample; every other move is title + tags only.
+- plan: summary (3–5 sentences quoting their goals), strengths (3–6 specific positives), expectations (2–4 honest sentences). Do NOT include phases, routine, shoppingList, or checkpoints.
+- builtFor: short chips echoing the profile; empty array if no profile.`;
+
 // Tool schema — a pragmatic subset; the model fills the full v2 shape.
 const LEVEL = { type: "string", enum: ["high", "medium", "low"] } as const;
 const SUGGESTION = {
@@ -175,6 +196,63 @@ const ANALYSIS_TOOL = {
       builtFor: { type: "array", items: { type: "string" } },
     },
     required: ["observations", "advice", "plan", "builtFor"],
+  },
+} as const;
+
+// Teaser suggestion — the free scan only requires the cheap tags for each move
+// (so the "17 moves · 7 quick wins · 11 strong-evidence" counts render); the
+// expensive detail/why/how is optional and only written for the one freeReveal.
+const TEASER_SUGGESTION = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    title: { type: "string" },
+    impact: LEVEL,
+    effort: LEVEL,
+    cost: LEVEL,
+    evidence: { type: "string", enum: ["strong", "moderate", "emerging"] },
+    freeReveal: { type: "boolean" },
+    detail: { type: "string" },
+    why: { type: "string" },
+    how: { type: "array", items: { type: "string" } },
+    timeline: { type: "string" },
+    frequency: { type: "string" },
+  },
+  required: ["id", "title", "impact", "effort", "cost"],
+} as const;
+
+const TEASER_TOOL = {
+  name: "emit_teaser",
+  description:
+    "Emit the free HaloLabs teaser: observations, the move list (tags only, exactly one written out in full), and a short cover note. No routine, roadmap, or shopping list.",
+  input_schema: {
+    type: "object",
+    properties: {
+      observations: (
+        ANALYSIS_TOOL.input_schema.properties as Record<string, unknown>
+      ).observations,
+      advice: {
+        type: "object",
+        properties: {
+          hair: { type: "array", items: TEASER_SUGGESTION },
+          skin: { type: "array", items: TEASER_SUGGESTION },
+          style: { type: "array", items: TEASER_SUGGESTION },
+          fitness: { type: "array", items: TEASER_SUGGESTION },
+        },
+        required: ["hair", "skin", "style", "fitness"],
+      },
+      plan: {
+        type: "object",
+        properties: {
+          summary: { type: "string" },
+          strengths: { type: "array", items: { type: "string" } },
+          expectations: { type: "string" },
+        },
+        required: ["summary", "strengths", "expectations"],
+      },
+      builtFor: { type: "array", items: { type: "string" } },
+    },
+    required: ["observations", "advice", "plan"],
   },
 } as const;
 
@@ -321,159 +399,247 @@ function estimateCostCents(u: {
   );
 }
 
+type AnyTool = typeof ANALYSIS_TOOL | typeof TEASER_TOOL;
+
 /**
- * Run one analysis job to completion: mark RUNNING, call the model, write the
- * result, mark COMPLETED (or FAILED with the error). Safe to call fire-and-
- * forget from a route handler on a persistent Node server.
+ * One structured, tool-forced model call with the shared client (bounded
+ * timeout + retries, since jobs run fire-and-forget) and prompt-caching on the
+ * static tools+system prefix. Returns the tool payload + usage.
  */
-export async function runAnalysisJob(jobId: string): Promise<void> {
+async function callModel(opts: {
+  system: string;
+  tool: AnyTool;
+  toolName: string;
+  userText: string;
+  blocks: ImageBlock[];
+}): Promise<{ payload: Partial<Person>; usage: Anthropic.Usage }> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 4 * 60 * 1000,
+    maxRetries: 2,
+  });
+  const res = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 12000,
+    system: [
+      { type: "text", text: opts.system, cache_control: { type: "ephemeral" } },
+    ],
+    tools: [opts.tool as unknown as Anthropic.Tool],
+    tool_choice: { type: "tool", name: opts.toolName },
+    messages: [
+      { role: "user", content: [{ type: "text", text: opts.userText }, ...opts.blocks] },
+    ],
+  });
+  const toolUse = res.content.find(
+    (c): c is Anthropic.ToolUseBlock => c.type === "tool_use"
+  );
+  if (!toolUse) throw new Error("Model did not return a structured analysis.");
+  return { payload: toolUse.input as Partial<Person>, usage: res.usage };
+}
+
+/** Assemble a Person record from a tool payload. */
+function buildRecord(
+  personId: string,
+  displayName: string,
+  photos: string[],
+  payload: Partial<Person>
+): Person {
+  return {
+    id: personId,
+    displayName,
+    analyzedAt: new Date().toISOString(),
+    photoCount: photos.length,
+    photos,
+    observations: payload.observations ?? {
+      faceShape: "",
+      hair: "",
+      skin: "",
+      facialHair: "",
+      generalNotes: "",
+    },
+    advice: payload.advice ?? { hair: [], skin: [], style: [], fitness: [] },
+    ...(payload.plan ? { plan: payload.plan } : {}),
+    ...(payload.builtFor ? { builtFor: payload.builtFor } : {}),
+  };
+}
+
+async function markFailed(jobId: string, err: unknown): Promise<void> {
+  await prisma.analysisJob.update({
+    where: { id: jobId },
+    data: {
+      status: "FAILED",
+      error: err instanceof Error ? err.message.slice(0, 500) : "Unknown error",
+      completedAt: new Date(),
+    },
+  });
+}
+
+async function loadJob(jobId: string) {
   const job = await prisma.analysisJob.findUnique({
     where: { id: jobId },
     include: { person: true },
   });
-  if (!job) return;
-
+  if (!job) return null;
   if (!analysisConfigured()) {
-    await prisma.analysisJob.update({
-      where: { id: jobId },
-      data: {
-        status: "FAILED",
-        error: "Analysis is not configured (missing ANTHROPIC_API_KEY).",
-        completedAt: new Date(),
-      },
-    });
-    return;
+    await markFailed(jobId, new Error("Analysis is not configured (missing ANTHROPIC_API_KEY)."));
+    return null;
   }
+  await prisma.analysisJob.update({
+    where: { id: jobId },
+    data: { status: "RUNNING", startedAt: new Date() },
+  });
+  return job;
+}
 
-  try {
-    await prisma.analysisJob.update({
-      where: { id: jobId },
-      data: { status: "RUNNING", startedAt: new Date() },
-    });
+function profileTextFor(profile: unknown): string {
+  return profile
+    ? `Onboarding answers (respect these):\n${JSON.stringify(profile, null, 2)}`
+    : "No onboarding profile was provided — build from the photos alone and do not invent preferences.";
+}
 
-    const { photos, blocks } = await collectImages(job.personId);
-    if (blocks.length === 0) {
-      throw new Error("No readable photos found for this person.");
-    }
-
-    const profile = job.person.profile as Record<string, unknown> | null;
-    const profileText = profile
-      ? `Onboarding answers (respect these):\n${JSON.stringify(profile, null, 2)}`
-      : "No onboarding profile was provided — build from the photos alone and do not invent preferences.";
-
-    // Bounded timeout + retries: this runs fire-and-forget, so a network hang
-    // must eventually reject (→ job FAILED) rather than pin the job at RUNNING
-    // and block the next start. 4 min is comfortably above a normal scan.
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      timeout: 4 * 60 * 1000,
-      maxRetries: 2,
-    });
-    const res = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 12000,
-      // Cache the static prefix (tools render first, then system). One breakpoint
-      // on the last system block caches tools + system together, so every scan
-      // after the first reads that ~3k-token rubric at ~0.1× instead of full
-      // price. The photos live in `messages` after the breakpoint, so they never
-      // pollute the cache key. Verify via usage.cache_read_input_tokens below.
-      system: [
-        { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
-      ],
-      tools: [ANALYSIS_TOOL as unknown as Anthropic.Tool],
-      tool_choice: { type: "tool", name: "emit_analysis" },
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Analyze ${job.person.displayName}. ${profileText}\n\nCall emit_analysis with the complete v2 record.`,
-            },
-            ...blocks,
-          ],
-        },
-      ],
-    });
-
-    const toolUse = res.content.find(
-      (c): c is Anthropic.ToolUseBlock => c.type === "tool_use"
-    );
-    if (!toolUse) throw new Error("Model did not return a structured analysis.");
-
-    const payload = toolUse.input as Partial<Person>;
-    const record: Person = {
-      id: job.personId,
-      displayName: job.person.displayName,
-      analyzedAt: new Date().toISOString(),
-      photoCount: photos.length,
-      photos,
-      observations: payload.observations ?? {
-        faceShape: "",
-        hair: "",
-        skin: "",
-        facialHair: "",
-        generalNotes: "",
-      },
-      advice: payload.advice ?? { hair: [], skin: [], style: [], fitness: [] },
-      ...(payload.plan ? { plan: payload.plan } : {}),
-      ...(payload.builtFor ? { builtFor: payload.builtFor } : {}),
-    };
-
-    const usage = res.usage;
-    const inputTokens = usage.input_tokens;
-    const outputTokens = usage.output_tokens;
-
-    // Cache visibility: a warm rubric shows up as cache_read_input_tokens > 0.
-    // If it's persistently 0 across scans, a silent invalidator crept into the
-    // static prefix (see lib/analyze system[] / ANALYSIS_TOOL).
-    console.log(
-      `[analyze] job=${job.id} images=${photos.length} in=${inputTokens} out=${outputTokens} ` +
-        `cacheWrite=${usage.cache_creation_input_tokens ?? 0} cacheRead=${usage.cache_read_input_tokens ?? 0}`
-    );
-
-    await prisma.$transaction([
-      prisma.analysisResult.create({
-        data: {
-          jobId: job.id,
-          personId: job.personId,
-          version: 2,
-          data: record as unknown as object,
-        },
-      }),
-      prisma.analysisJob.update({
-        where: { id: job.id },
-        data: {
-          status: "COMPLETED",
-          completedAt: new Date(),
-          inputTokens,
-          outputTokens,
-          costCents: estimateCostCents(usage),
-        },
-      }),
-    ]);
-  } catch (err) {
-    await prisma.analysisJob.update({
-      where: { id: jobId },
+async function writeResult(
+  job: { id: string; personId: string },
+  record: Person,
+  usage: Anthropic.Usage,
+  label: string
+): Promise<void> {
+  console.log(
+    `[analyze:${label}] job=${job.id} in=${usage.input_tokens} out=${usage.output_tokens} ` +
+      `cacheWrite=${usage.cache_creation_input_tokens ?? 0} cacheRead=${usage.cache_read_input_tokens ?? 0}`
+  );
+  await prisma.$transaction([
+    prisma.analysisResult.create({
       data: {
-        status: "FAILED",
-        error: err instanceof Error ? err.message.slice(0, 500) : "Unknown error",
-        completedAt: new Date(),
+        jobId: job.id,
+        personId: job.personId,
+        version: 2,
+        data: record as unknown as object,
       },
+    }),
+    prisma.analysisJob.update({
+      where: { id: job.id },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        costCents: estimateCostCents(usage),
+      },
+    }),
+  ]);
+}
+
+/**
+ * The FREE scan: generate only the cheap teaser (observations, the tagged move
+ * list with one move revealed, a short cover note). The expensive routine /
+ * roadmap / shopping list is deferred to runFullPlanJob, which only fires on
+ * purchase — so a wave of free scans doesn't burn plan budget for plans nobody
+ * buys. Fire-and-forget safe.
+ */
+export async function runAnalysisJob(jobId: string): Promise<void> {
+  const job = await loadJob(jobId);
+  if (!job) return;
+  try {
+    const { photos, blocks } = await collectImages(job.personId);
+    if (blocks.length === 0) throw new Error("No readable photos found for this person.");
+    const { payload, usage } = await callModel({
+      system: TEASER_SYSTEM_PROMPT,
+      tool: TEASER_TOOL,
+      toolName: "emit_teaser",
+      userText:
+        `Analyze ${job.person.displayName} — this is the FREE teaser. ${profileTextFor(job.person.profile)}\n\n` +
+        `Call emit_teaser: observations, the full move list with tags (exactly one move fully written out with freeReveal:true), and a short cover note (summary, strengths, expectations). Do NOT produce the routine, roadmap, or shopping list.`,
+      blocks,
     });
+    await writeResult(job, buildRecord(job.personId, job.person.displayName, photos, payload), usage, "teaser");
+  } catch (err) {
+    await markFailed(jobId, err);
   }
 }
 
-/** Create a queued job for a person and start it (fire-and-forget). */
-export async function startAnalysis(
-  userId: string,
-  personId: string
-): Promise<string> {
+/**
+ * The PAID pass: fill in every move's detail/why/how/products and build the full
+ * plan (phases, routine, shopping list, checkpoints). Seeded with the teaser
+ * that already exists so the moves and cover the user saw stay consistent. Runs
+ * only when someone unlocks (see /api/person/[id]/full). Fire-and-forget safe.
+ */
+export async function runFullPlanJob(jobId: string): Promise<void> {
+  const job = await loadJob(jobId);
+  if (!job) return;
+  try {
+    const prev = await prisma.analysisResult.findFirst({
+      where: { personId: job.personId },
+      orderBy: { createdAt: "desc" },
+    });
+    const teaser = prev?.data as unknown as Person | undefined;
+
+    const { photos, blocks } = await collectImages(job.personId);
+    if (blocks.length === 0) throw new Error("No readable photos found for this person.");
+
+    const teaserContext = teaser
+      ? `You already produced this free teaser for them — keep the SAME observations, the SAME moves (same ids, same titles, same count — do not add or drop any), and the SAME strengths/summary. Only flesh out the detail and build the plan:\n${JSON.stringify(
+          {
+            observations: teaser.observations,
+            advice: teaser.advice,
+            strengths: teaser.plan?.strengths,
+            summary: teaser.plan?.summary,
+          },
+          null,
+          2
+        )}`
+      : "No teaser was found — produce the complete record from the photos.";
+
+    const { payload, usage } = await callModel({
+      system: SYSTEM_PROMPT,
+      tool: ANALYSIS_TOOL,
+      toolName: "emit_analysis",
+      userText:
+        `Complete the full plan for ${job.person.displayName}. ${profileTextFor(job.person.profile)}\n\n${teaserContext}\n\n` +
+        `Call emit_analysis with the COMPLETE v2 record: every move fully written (detail, why tied to their photos, how as 2–5 steps, products matched to budget, timeline, frequency, phase, routineSlot), plus the full plan — exactly 3 phases distributing every move id, an AM/PM/weekly routine with correct layering, a deduplicated shoppingList, and 3–4 checkpoints.`,
+      blocks,
+    });
+
+    const full = buildRecord(job.personId, job.person.displayName, photos, payload);
+    // Preserve the exact cover the user already saw (observations + summary +
+    // strengths + expectations) so unlocking never silently rewrites it; take
+    // the newly-generated advice detail + plan.
+    const merged: Person = {
+      ...full,
+      observations: teaser?.observations ?? full.observations,
+      builtFor: teaser?.builtFor ?? full.builtFor,
+      ...(full.plan
+        ? {
+            plan: {
+              ...full.plan,
+              summary: teaser?.plan?.summary?.trim() ? teaser.plan.summary : full.plan.summary,
+              strengths: teaser?.plan?.strengths?.length ? teaser.plan.strengths : full.plan.strengths,
+              expectations: teaser?.plan?.expectations?.trim()
+                ? teaser.plan.expectations
+                : full.plan.expectations,
+            },
+          }
+        : {}),
+    };
+    await writeResult(job, merged, usage, "full");
+  } catch (err) {
+    await markFailed(jobId, err);
+  }
+}
+
+/** Queue + start the free teaser scan (fire-and-forget). */
+export async function startAnalysis(userId: string, personId: string): Promise<string> {
   const job = await prisma.analysisJob.create({
     data: { userId, personId, status: "QUEUED" },
   });
-  // Persistent Node server (Railway): the promise keeps running after the
-  // response returns. A dedicated queue/worker would be the next hardening step.
   void runAnalysisJob(job.id);
+  return job.id;
+}
+
+/** Queue + start the paid full-plan generation (fire-and-forget). */
+export async function startFullPlan(userId: string, personId: string): Promise<string> {
+  const job = await prisma.analysisJob.create({
+    data: { userId, personId, status: "QUEUED" },
+  });
+  void runFullPlanJob(job.id);
   return job.id;
 }

@@ -59,8 +59,8 @@ export default function PlanBoard({
     (plan.routine ?? []).filter((r) => r.slot === slot);
 
   // A phase with nothing in it (e.g. nothing to maintain yet) is noise —
-  // skip it rather than render an empty column.
-  const phases = plan.phases.filter((p) => p.suggestionIds.length > 0);
+  // skip it rather than render an empty column. (Teaser plans have no phases.)
+  const phases = (plan.phases ?? []).filter((p) => p.suggestionIds.length > 0);
   const totalPlanned = phases.reduce((n, p) => n + p.suggestionIds.length, 0);
   const totalDone = phases.reduce(
     (n, p) => n + p.suggestionIds.filter((sid) => isDone(sid)).length,
@@ -70,9 +70,9 @@ export default function PlanBoard({
 
   // Number only the sections that actually render, counting up from startNum.
   const pad = (x: number) => String(x).padStart(2, "0");
-  const showRoutine = plan.routine.length > 0;
+  const showRoutine = (plan.routine ?? []).length > 0;
   const showRoadmap = phases.length > 0;
-  const showShopping = plan.shoppingList.length > 0 || plan.checkpoints.length > 0;
+  const showShopping = (plan.shoppingList ?? []).length > 0 || (plan.checkpoints ?? []).length > 0;
   let secN = startNum;
   const routineNum = showRoutine ? pad(secN++) : "";
   const roadmapNum = showRoadmap ? pad(secN++) : "";
@@ -81,7 +81,7 @@ export default function PlanBoard({
   return (
     <>
       {/* ── [04] Routine ─────────────────────────────────────────────── */}
-      {plan.routine.length > 0 && (
+      {(plan.routine ?? []).length > 0 && (
         <ReportSection
           num={routineNum}
           titleA="Your daily"
@@ -240,7 +240,7 @@ export default function PlanBoard({
       )}
 
       {/* ── [06] Shopping list & checkpoints ─────────────────────────── */}
-      {(plan.shoppingList.length > 0 || plan.checkpoints.length > 0) && (
+      {((plan.shoppingList ?? []).length > 0 || (plan.checkpoints ?? []).length > 0) && (
         <ReportSection
           num={shoppingNum}
           titleA="Shopping list"
@@ -252,21 +252,21 @@ export default function PlanBoard({
           collapsible={!locked}
           defaultOpen={false}
           collapsedHint={
-            plan.shoppingList.length > 0
-              ? `${plan.shoppingList.length} product ${
-                  plan.shoppingList.length === 1 ? "category" : "categories"
+            (plan.shoppingList ?? []).length > 0
+              ? `${(plan.shoppingList ?? []).length} product ${
+                  (plan.shoppingList ?? []).length === 1 ? "category" : "categories"
                 } to buy, with price bands and re-photo checkpoints. `
               : "Your re-photo checkpoints. "
           }
         >
           <div className="grid divide-y divide-line lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:divide-x lg:divide-y-0">
-            {plan.shoppingList.length > 0 && (
+            {(plan.shoppingList ?? []).length > 0 && (
               <div>
                 <p className="border-b border-line px-6 py-4 font-mono text-[10px] uppercase tracking-label text-ink-soft sm:px-8">
                   What to buy /
                 </p>
                 <ul className="divide-y divide-line">
-                  {plan.shoppingList.map((item) => {
+                  {(plan.shoppingList ?? []).map((item) => {
                     const info = item.suggestionId ? byId.get(item.suggestionId) : undefined;
                     return (
                       <li
@@ -298,7 +298,7 @@ export default function PlanBoard({
               </div>
             )}
 
-            {plan.checkpoints.length > 0 && (
+            {(plan.checkpoints ?? []).length > 0 && (
               <div className="px-6 py-8 sm:px-8">
                 <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
                   Checkpoints /
@@ -308,7 +308,7 @@ export default function PlanBoard({
                   consistency is what makes progress visible.
                 </p>
                 <ol className="mt-6 space-y-5">
-                  {plan.checkpoints.map((cp) => (
+                  {(plan.checkpoints ?? []).map((cp) => (
                     <li key={cp.week} className="flex items-baseline gap-6">
                       <span className="w-10 shrink-0 font-mono text-xs text-pine">
                         [w{cp.week}]

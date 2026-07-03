@@ -94,3 +94,14 @@ export function hasPlan(person: Person): boolean {
     p && (p.phases?.length || p.routine?.length || p.summary?.trim())
   );
 }
+
+/**
+ * Has the expensive PAID plan been generated (routine/roadmap), vs just the free
+ * teaser (summary + strengths + a tagged move list)? Drives the "building your
+ * full plan" state after purchase. See lib/analyze split-generation.
+ */
+export function hasFullPlan(person: Person): boolean {
+  const p = person.plan;
+  const phases = (p?.phases ?? []).filter((ph) => ph.suggestionIds.length > 0);
+  return Boolean(phases.length > 0 || (p?.routine?.length ?? 0) > 0);
+}
