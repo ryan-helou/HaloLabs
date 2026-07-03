@@ -70,8 +70,14 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans">
         <ToastProvider>
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-full focus:bg-ink focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-paper focus:shadow-float"
+          >
+            Skip to content
+          </a>
           <Header />
-          <main className="mx-auto max-w-5xl px-6 pb-8 pt-6">{children}</main>
+          <main id="main" className="mx-auto max-w-5xl px-6 pb-8 pt-6">{children}</main>
         <footer className="overflow-hidden border-t border-line">
           <div className="mx-auto grid max-w-[1500px] gap-10 px-6 py-12 sm:px-10 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             <div>
