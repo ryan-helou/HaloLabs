@@ -211,7 +211,7 @@ export default function PersonHero({ person }: { person: Person }) {
           {/* Signal readout — where the findings cluster, staged like a
               diagnostic printout: bars grow in on load, staggered. */}
           {catStats.length > 0 && (
-            <div className="mt-10 max-w-md">
+            <div className="mt-10 max-w-lg">
               <p className="font-mono text-[10px] uppercase tracking-label text-pine-deep/70">
                 Scan readout /
               </p>
@@ -219,7 +219,7 @@ export default function PersonHero({ person }: { person: Person }) {
                 {catStats.map((c, i) => (
                   <div
                     key={c.cat}
-                    className="grid grid-cols-[3.75rem_1fr_10.5rem] items-center gap-x-3"
+                    className="grid grid-cols-[3.75rem_1fr_12rem] items-center gap-x-3"
                   >
                     <dt className="text-[13px] font-medium text-ink">
                       {c.label}
@@ -238,7 +238,7 @@ export default function PersonHero({ person }: { person: Person }) {
                         }}
                       />
                     </dd>
-                    <dd className="font-mono text-[10px] uppercase tracking-label text-pine-deep/70">
+                    <dd className="whitespace-nowrap font-mono text-[10px] uppercase tracking-label text-pine-deep/70">
                       {c.count} found
                       {c.high > 0 && (
                         <span className="text-clay"> · {c.high} high-impact</span>
