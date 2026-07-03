@@ -39,8 +39,8 @@ async function latestRecord(personId: string): Promise<Person | undefined> {
 }
 
 /** POST → ensure a full plan is being (or has been) generated for this person. */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  const id = decodeURIComponent(params.id);
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = decodeURIComponent((await params).id);
   const gate = await ownedUnlockedPerson(id);
   if ("error" in gate) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
@@ -71,8 +71,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 }
 
 /** GET → poll the full-plan generation state. */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const id = decodeURIComponent(params.id);
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const id = decodeURIComponent((await params).id);
   const gate = await ownedUnlockedPerson(id);
   if ("error" in gate) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });

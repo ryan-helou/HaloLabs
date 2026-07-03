@@ -18,8 +18,9 @@ export const metadata: Metadata = {
 export default async function ProfilesPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  const sp = await searchParams;
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
   const [people, unlocked, dbBacked] = await Promise.all([
@@ -34,8 +35,8 @@ export default async function ProfilesPage({
     a.displayName.localeCompare(b.displayName)
   );
 
-  const justUpgraded = searchParams?.upgraded === "1";
-  const billingUnavailable = searchParams?.billing === "unavailable";
+  const justUpgraded = sp?.upgraded === "1";
+  const billingUnavailable = sp?.billing === "unavailable";
 
   return (
     <div className="py-6">

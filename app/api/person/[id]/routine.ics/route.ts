@@ -14,9 +14,9 @@ export const runtime = "nodejs";
  */
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const id = decodeURIComponent(params.id);
+  const id = decodeURIComponent((await params).id);
   const person = await loadPerson(id);
   if (!person) return new Response("Not found", { status: 404 });
 
