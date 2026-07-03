@@ -5,13 +5,15 @@ import { loadPerson } from "@/lib/data";
 import { loadProgressForPerson } from "@/lib/progress";
 import { loadCheckins } from "@/lib/checkins";
 import { hasPlan, hasFullPlan, pickFreeReveal, flattenAdvice } from "@/lib/plan";
-import { isUnlocked } from "@/lib/entitlement";
+import { isActive } from "@/lib/entitlement";
+import { auth } from "@/lib/auth";
 import PersonHero from "@/components/PersonHero";
 import AdviceBoard from "@/components/AdviceBoard";
 import PlanOverview from "@/components/PlanOverview";
 import HaloGlance from "@/components/HaloGlance";
 import LockedScanHook from "@/components/LockedScanHook";
 import FullPlanBuilder from "@/components/FullPlanBuilder";
+import PostPurchaseSetup from "@/components/PostPurchaseSetup";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import ProgressTimeline from "@/components/ProgressTimeline";
@@ -57,8 +59,12 @@ export default async function PersonPage({
   // the rest. It now reads the signed-in user's subscriptionStatus (Phase 2);
   // Stripe's webhook flips that flag in Phase 3. `?unlocked=1` stays as a
   // preview override for tuning what's free vs. locked.
-  const unlocked = (await isUnlocked()) || sp?.unlocked === "1";
+  const session = await auth();
+  const unlocked = isActive(session?.user?.subscriptionStatus) || sp?.unlocked === "1";
   const locked = !unlocked;
+  // A paying visitor who's still a guest (no password yet) hasn't created their
+  // account — that step now happens after payment, before the full plan builds.
+  const isGuest = Boolean(session?.user?.isGuest);
 
   // The single suggestion shown in full on a locked plan, chosen deterministically
   // (skill-flagged freeReveal, else the best impact/effort candidate).
@@ -116,10 +122,15 @@ export default async function PersonPage({
       <PersonHero person={person} />
 
       {building ? (
-        /* Just unlocked, full plan still generating — build screen takes over
-           until it's ready, then refreshes into the plan below. */
+        /* Just unlocked. A guest first creates their account + fills in their
+           info (which personalizes the paid plan); everyone else goes straight
+           to the build screen, which refreshes into the plan when ready. */
         <div className="border-b border-line">
-          <FullPlanBuilder personId={person.id} />
+          {isGuest ? (
+            <PostPurchaseSetup personId={person.id} />
+          ) : (
+            <FullPlanBuilder personId={person.id} />
+          )}
         </div>
       ) : (
       <ProgressProvider personId={person.id} initial={progress}>

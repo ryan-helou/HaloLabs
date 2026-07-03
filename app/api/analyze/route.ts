@@ -54,19 +54,41 @@ async function dbPersonFor(userId: string, id: string) {
 }
 
 export async function POST(req: Request) {
-  let body: { id?: string };
+  let body: { id?: string; ageConfirmed18Plus?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   const id = String(body.id ?? "");
+  const ageOk = body.ageConfirmed18Plus === true;
 
   // ── Cloud path ──────────────────────────────────────────────────────
   const session = await auth();
   if (session?.user?.id) {
     const person = await dbPersonFor(session.user.id, id);
     if (person) {
+      // 18+ gate (policy) — confirmed on the photos step, right before the run.
+      // Persist it on the account so a re-analysis doesn't ask again.
+      const acct = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { ageConfirmed18Plus: true },
+      });
+      if (!ageOk && !acct?.ageConfirmed18Plus) {
+        return NextResponse.json(
+          {
+            started: false,
+            error: "Please confirm you're 18 or older to run the analysis.",
+          },
+          { status: 403 }
+        );
+      }
+      if (ageOk && !acct?.ageConfirmed18Plus) {
+        await prisma.user.update({
+          where: { id: session.user.id },
+          data: { ageConfirmed18Plus: true },
+        });
+      }
       // Don't double-start if a job is already in flight — but a job that has
       // been in flight longer than the worker's own timeout is dead (crash,
       // redeploy mid-run). Reap it so it can't wedge the person forever.

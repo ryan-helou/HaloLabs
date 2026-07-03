@@ -11,8 +11,13 @@ import type { NextAuthConfig } from "next-auth";
  */
 
 // App areas that require a signed-in account. The public landing page, the
-// auth pages, and Next internals stay open.
-const PROTECTED_PREFIXES = ["/profiles", "/person", "/start"];
+// auth pages, and Next internals stay open. The free-scan funnel (/start, and
+// the /person teaser it produces) is intentionally OPEN: a visitor gets a
+// silent guest session on entry, so gating those would block the very first hit
+// before the session exists. /profiles is the real account area and stays
+// gated (a guest technically passes it, which is fine — they only see their
+// own scan).
+const PROTECTED_PREFIXES = ["/profiles"];
 
 export const authConfig = {
   pages: {
