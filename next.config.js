@@ -1,11 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // sharp is a native module used by the server-side analysis worker
-  // (lib/analyze). Keep it external so Next doesn't try to bundle the platform
-  // binary — this is what lets it load cleanly on Railway.
+  // Native / wasm modules used server-side: sharp (analysis worker) and
+  // heic-convert + its libheif-js wasm decoder (HEIC→JPEG on upload). Keep them
+  // external so Next doesn't bundle the platform binaries/wasm — this is what
+  // lets them load cleanly on Railway.
   experimental: {
-    serverComponentsExternalPackages: ["sharp"],
+    serverComponentsExternalPackages: ["sharp", "heic-convert", "libheif-js"],
   },
 };
 
