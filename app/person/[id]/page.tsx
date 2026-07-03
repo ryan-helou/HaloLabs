@@ -15,6 +15,7 @@ import HaloGlance from "@/components/HaloGlance";
 import LockedScanHook from "@/components/LockedScanHook";
 import FullPlanBuilder from "@/components/FullPlanBuilder";
 import PostPurchaseSetup from "@/components/PostPurchaseSetup";
+import MemberTabs from "@/components/MemberTabs";
 import PlanBoard from "@/components/PlanBoard";
 import ReportSection from "@/components/ReportSection";
 import ProgressTimeline from "@/components/ProgressTimeline";
@@ -119,6 +120,46 @@ export default async function PersonPage({
   // Progress check-ins are a member feature (part of the plan you paid for).
   const checkins = !locked && !building ? await loadCheckins(person.id) : [];
 
+  // A full-fledged member view (paid + the full plan is generated) gets the
+  // tabbed layout; the locked teaser (or a paid-but-not-yet-built plan) keeps
+  // the single selling scroll.
+  const fullMember = !locked && planReady && hasFullPlan(person);
+
+  // The observations act ("what the photos show") is reused in both layouts.
+  const observationsSection = (num: string) => (
+    <ReportSection
+      num={num}
+      titleA="What the"
+      titleB="photos show"
+      blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion above was built from."
+      collapsible
+      defaultOpen={false}
+      collapsedHint="Neutral notes on your hair, skin, face shape, and more — the raw material behind every suggestion. "
+      rail={
+        <Link
+          href={`/start/photos?id=${encodeURIComponent(person.id)}`}
+          className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
+        >
+          Add photos / re-analyze →
+        </Link>
+      }
+    >
+      <dl className="divide-y divide-line">
+        {observationRows.map(({ label, text }) => (
+          <div
+            key={label}
+            className="grid gap-1 px-6 py-5 sm:grid-cols-[150px_1fr] sm:gap-8 sm:px-8"
+          >
+            <dt className="eyebrow pt-0.5">{label}</dt>
+            <dd className="max-w-prose text-[15px] leading-relaxed text-ink">
+              {text || <span className="text-ink-soft">Not noted.</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </ReportSection>
+  );
+
   return (
     // Full-bleed breakout of the layout's max-w-5xl main, same as the landing
     // page — the report runs in Qoves-style framed bands, not floating cards.
@@ -143,12 +184,65 @@ export default async function PersonPage({
             <FullPlanBuilder personId={person.id} />
           )}
         </div>
+      ) : fullMember && plan ? (
+        /* Paid member with the full plan built — the report is long, so split it
+           into tabs (Overview / Plan / Analysis / Progress) instead of one
+           endless scroll. Check-off state is shared across tabs by the provider. */
+        <ProgressProvider personId={person.id} initial={progress}>
+          <MemberTabs
+            tabs={[
+              {
+                id: "overview",
+                label: "Overview",
+                content: <HaloGlance person={person} />,
+              },
+              {
+                id: "plan",
+                label: "Your plan",
+                content: (
+                  <PlanBoard
+                    plan={plan}
+                    advice={person.advice}
+                    personId={person.id}
+                    startNum={1}
+                  />
+                ),
+              },
+              {
+                id: "analysis",
+                label: "Analysis",
+                content: (
+                  <>
+                    <AdviceBoard
+                      advice={person.advice}
+                      startNum={1}
+                      freeKey={freeKey}
+                    />
+                    {observationsSection("03")}
+                  </>
+                ),
+              },
+              {
+                id: "progress",
+                label: "Progress",
+                content: (
+                  <ProgressTimeline
+                    personId={person.id}
+                    baselinePhoto={person.photos[0]}
+                    baselineAt={person.analyzedAt}
+                    checkins={checkins}
+                  />
+                ),
+              },
+            ]}
+          />
+        </ProgressProvider>
       ) : (
       <ProgressProvider personId={person.id} initial={progress}>
-        {/* Unlocked: the digest — what to start with, where the plan focuses,
-            what already works. Locked: the free-scan hook — proof it saw them
-            (strengths), where their leverage is, one real move free, and the
-            honest "the gains stack" sell into the paywall. */}
+        {/* Locked teaser (or a paid plan still building): a single selling
+            scroll. The free-scan hook leads — proof it saw them (strengths),
+            where their leverage is, one real move free, and the honest "the
+            gains stack" sell into the paywall. */}
         {planReady ? (
           locked ? (
             <LockedScanHook person={person} />
@@ -170,9 +264,7 @@ export default async function PersonPage({
           />
         )}
 
-        {/* The report body: numbered acts stacked as one framed document.
-            Routine + roadmap stay open as the daily driver; the deeper
-            reference (shopping, protocol, analysis, photos) collapses. */}
+        {/* The report body: numbered acts stacked as one framed document. */}
         <div className="border-b border-line">
           {planReady && plan && hasFullPlan(person) && (
             <PlanBoard
@@ -193,37 +285,7 @@ export default async function PersonPage({
           />
 
           {/* Observations last — the raw material every suggestion is built from. */}
-          <ReportSection
-            num={obsNum}
-            titleA="What the"
-            titleB="photos show"
-            blurb="Neutral notes on what is actually visible in your photos — the raw material every suggestion above was built from."
-            collapsible
-            defaultOpen={false}
-            collapsedHint="Neutral notes on your hair, skin, face shape, and more — the raw material behind every suggestion. "
-            rail={
-              <Link
-                href={`/start/photos?id=${encodeURIComponent(person.id)}`}
-                className="font-mono text-[11px] uppercase tracking-label text-pine transition-colors hover:text-pine-deep"
-              >
-                Add photos / re-analyze →
-              </Link>
-            }
-          >
-            <dl className="divide-y divide-line">
-              {observationRows.map(({ label, text }) => (
-                <div
-                  key={label}
-                  className="grid gap-1 px-6 py-5 sm:grid-cols-[150px_1fr] sm:gap-8 sm:px-8"
-                >
-                  <dt className="eyebrow pt-0.5">{label}</dt>
-                  <dd className="max-w-prose text-[15px] leading-relaxed text-ink">
-                    {text || <span className="text-ink-soft">Not noted.</span>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </ReportSection>
+          {observationsSection(obsNum)}
         </div>
       </ProgressProvider>
       )}
