@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ProgressEntry } from "@/lib/types";
+import { useToast } from "./Toast";
 
 /**
  * One source of truth for check-off state across the whole report, so a move
@@ -34,6 +35,7 @@ export function ProgressProvider({
 }) {
   const [progress, setProgress] =
     useState<Record<string, ProgressEntry>>(initial);
+  const toast = useToast();
 
   const toggle = useCallback(
     (suggestionId: string) => {
@@ -43,19 +45,23 @@ export function ProgressProvider({
           ...prev,
           [suggestionId]: { done: next, doneAt: new Date().toISOString() },
         };
+        const revert = () => {
+          setProgress(prev);
+          toast({ kind: "error", message: "Couldn't save that — check your connection." });
+        };
         fetch("/api/progress", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ personId, suggestionId, done: next }),
         })
           .then((res) => {
-            if (!res.ok) setProgress(prev);
+            if (!res.ok) revert();
           })
-          .catch(() => setProgress(prev));
+          .catch(revert);
         return optimistic;
       });
     },
-    [personId]
+    [personId, toast]
   );
 
   const isDone = useCallback(
