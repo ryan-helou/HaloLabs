@@ -1,32 +1,40 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Advice, Plan, RoutineSlot } from "@/lib/types";
+import type { Advice, Plan, RoutineSlot, Suggestion } from "@/lib/types";
 import type { FlatSuggestion } from "@/lib/plan";
 import { flattenAdvice } from "@/lib/plan";
 import { CATEGORY_META } from "@/lib/categories";
-import { isQuickWin } from "@/lib/badges";
 import { useProgress } from "./ProgressProvider";
 
 /**
- * The "Your plan" tab — move-centric. Instead of showing the same ~13 moves
- * three times (routine by time, roadmap by phase, protocol by category), each
- * move lives once as a checkable card tagged with its facets, and the reader
- * gets a simple default plus depth on demand:
- *   • This week  — the phase-1 moves, few, each expands to why/how/what-to-use.
- *   • Daily rhythm — the same moves as an AM/PM/weekly sequence (a view, not a
- *     second to-do list).
- *   • Coming up  — later phases, collapsed; check them off as they become habit.
- * The full browse-everything reference + the impact map live in the Analysis tab.
+ * The "Your plan" tab — a hand-held sequence, not a report. It walks the reader
+ * through the plan the way a coach would: buy a few things, start this week,
+ * keep a simple daily rhythm, then build from there. Four numbered steps,
+ * because the order is real (you buy before you start, you start before it
+ * becomes daily). Every surface stays simple; the full how-to for any move is
+ * one tap away.
+ *
+ *   ① First, buy these      — the shopping list up front, with prices.
+ *   ② This week, start these — the phase-1 moves, checkable, each expands.
+ *   ③ Every day             — the AM/PM/weekly rhythm as a read sequence.
+ *   ④ Then, as these stick   — later phases, collapsed until you're ready.
  */
 
-const SLOT_META: Record<RoutineSlot, { title: string; sub: string; icon: string }> = {
-  am: { title: "Morning", sub: "Every day", icon: "☀" },
-  pm: { title: "Evening", sub: "Every night", icon: "☾" },
-  weekly: { title: "Weekly", sub: "A few times a week", icon: "↻" },
+const SLOT_META: Record<RoutineSlot, { title: string; cap: string; glyph: string }> = {
+  am: { title: "Morning", cap: "Every morning", glyph: "☀" },
+  pm: { title: "Evening", cap: "Every night", glyph: "☾" },
+  weekly: { title: "Weekly", cap: "A few times a week", glyph: "↻" },
 };
 
-const COST_GLYPH: Record<string, string> = { low: "$", medium: "$$", high: "$$$" };
+/** First sentence of a string, trimmed to a friendly length for a one-liner. */
+function oneLiner(text?: string, max = 96): string {
+  if (!text) return "";
+  const first = text.split(/(?<=[.!?])\s/)[0].trim();
+  if (first.length <= max) return first;
+  const cut = first.slice(0, max);
+  return cut.slice(0, cut.lastIndexOf(" ")).trim() + "…";
+}
 
 export default function MovePlan({
   plan,
@@ -34,10 +42,9 @@ export default function MovePlan({
 }: {
   plan: Plan;
   advice: Advice;
-  /** Kept for signature parity with PlanBoard (calendar export etc.). */
+  /** Kept for signature parity (calendar export etc.). */
   personId?: string;
 }) {
-  const [view, setView] = useState<"week" | "rhythm">("week");
   const { isDone, toggle } = useProgress();
 
   const byId = useMemo(() => {
@@ -45,6 +52,7 @@ export default function MovePlan({
     for (const f of flattenAdvice(advice)) m.set(f.id, f);
     return m;
   }, [advice]);
+  const titleById = (id?: string) => (id ? byId.get(id)?.suggestion.title : undefined);
 
   const phases = (plan.phases ?? [])
     .filter((p) => p.suggestionIds.length > 0)
@@ -58,178 +66,74 @@ export default function MovePlan({
   const thisWeek = phase1 ? movesFor(phase1.suggestionIds) : [];
   const weekDone = thisWeek.filter((m) => isDone(m.id)).length;
 
+  const shopping = plan.shoppingList ?? [];
   const routineBySlot = (slot: RoutineSlot) =>
     (plan.routine ?? []).filter((r) => r.slot === slot);
   const hasRoutine = (plan.routine ?? []).length > 0;
 
-  const hasShopping =
-    (plan.shoppingList ?? []).length > 0 || (plan.checkpoints ?? []).length > 0;
-
   return (
-    <section className="mx-auto max-w-[1300px] px-5 py-9 sm:px-10 sm:py-12">
-      {/* View toggle + this-week progress */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div
-          role="tablist"
-          aria-label="Plan view"
-          className="inline-flex rounded-full border border-line bg-surface p-1 text-sm"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={view === "week"}
-            onClick={() => setView("week")}
-            className={`rounded-full px-4 py-1.5 transition-colors ${
-              view === "week" ? "bg-pine text-paper" : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            This week
-          </button>
-          {hasRoutine && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === "rhythm"}
-              onClick={() => setView("rhythm")}
-              className={`rounded-full px-4 py-1.5 transition-colors ${
-                view === "rhythm" ? "bg-pine text-paper" : "text-ink-soft hover:text-ink"
-              }`}
-            >
-              Daily rhythm
-            </button>
-          )}
-        </div>
-
-        {view === "week" && thisWeek.length > 0 && (
-          <div className="min-w-[160px]">
-            <div className="flex items-baseline justify-between font-mono text-[10px] uppercase tracking-label text-ink-soft">
-              <span>This week</span>
-              <span>
-                {weekDone}/{thisWeek.length} done
-              </span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
-              <div
-                className="h-full rounded-full bg-pine transition-all"
-                style={{ width: `${(weekDone / thisWeek.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
+    <section className="mx-auto max-w-[760px] px-5 pb-16 pt-9 sm:px-6">
+      {/* Orienting line — the coach's opening. */}
+      <div className="max-w-[52ch]">
+        <h2 className="font-display text-2xl font-medium tracking-tight text-ink sm:text-[28px]">
+          Here&apos;s exactly what to do.
+        </h2>
+        <p className="mt-2 text-[15px] leading-relaxed text-ink-soft">
+          Four steps, in order. Buy a few things, start this week, keep a simple
+          daily rhythm, then build from there. Tap any move for the full how-to.
+        </p>
       </div>
 
-      {/* ── THIS WEEK ─────────────────────────────────────────────────── */}
-      {view === "week" && (
-        <div className="mt-8">
-          {phase1 && (
-            <div className="flex items-baseline gap-3">
-              <h3 className="font-display text-2xl text-ink sm:text-3xl">
-                {phase1.title || "Start here"}
-              </h3>
-              <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                {phase1.window}
-              </span>
-            </div>
-          )}
-          {phase1?.focus && (
-            <p className="mt-2 max-w-prose text-sm leading-relaxed text-ink-soft">
-              {phase1.focus}
-            </p>
-          )}
+      {/* ── ① BUY ─────────────────────────────────────────────────────── */}
+      {shopping.length > 0 && (
+        <Step
+          num={1}
+          title="First, buy these"
+          sub="Everything to run the plan — roughly $25–75 a month. Examples, never affiliate links. Grab the non-optional ones first."
+        >
+          <BuyList shopping={shopping} titleById={titleById} />
+        </Step>
+      )}
 
-          <ol className="mt-6 space-y-2.5">
+      {/* ── ② THIS WEEK ───────────────────────────────────────────────── */}
+      {thisWeek.length > 0 && (
+        <Step
+          num={2}
+          title={phase1?.title?.trim() ? phase1.title : "This week, start these"}
+          sub={phase1?.focus || "Free-to-cheap changes that show up in the mirror this week."}
+          meta={`${weekDone} of ${thisWeek.length}`}
+        >
+          <div className="grid gap-2.5">
             {thisWeek.map((m) => (
               <MoveCard key={m.id} flat={m} done={isDone(m.id)} onToggle={toggle} />
             ))}
-          </ol>
-
-          {/* Coming up — later phases, collapsed. */}
-          {laterPhases.length > 0 && (
-            <div className="mt-10">
-              <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                Then, as these become habit /
-              </p>
-              <div className="mt-4 overflow-hidden rounded-2xl border border-line">
-                {laterPhases.map((p) => {
-                  const moves = movesFor(p.suggestionIds);
-                  const done = moves.filter((m) => isDone(m.id)).length;
-                  return (
-                    <details key={p.number} className="group border-b border-line last:border-b-0">
-                      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 hover:bg-[#FCFCFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine">
-                        <span className="font-medium text-[15px] text-ink">
-                          {p.title}
-                        </span>
-                        <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                          {p.window}
-                        </span>
-                        <span className="ml-auto font-mono text-[11px] text-ink-soft">
-                          {done}/{moves.length}
-                        </span>
-                        <span
-                          aria-hidden
-                          className="text-ink-soft transition-transform group-open:rotate-180"
-                        >
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m6 9 6 6 6-6" />
-                          </svg>
-                        </span>
-                      </summary>
-                      <ul className="divide-y divide-line border-t border-line">
-                        {moves.map((m) => (
-                          <li key={m.id} className="flex items-center gap-3 px-5 py-3">
-                            <CheckButton done={isDone(m.id)} onClick={() => toggle(m.id)} title={m.suggestion.title} />
-                            <div className="min-w-0 flex-1">
-                              <p className={`text-sm ${isDone(m.id) ? "text-ink-soft line-through decoration-line" : "text-ink"}`}>
-                                {m.suggestion.title}
-                              </p>
-                            </div>
-                            <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-label text-ink-soft">
-                              <i
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: CATEGORY_META[m.category].color }}
-                              />
-                              {CATEGORY_META[m.category].label}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        </Step>
       )}
 
-      {/* ── DAILY RHYTHM ──────────────────────────────────────────────── */}
-      {view === "rhythm" && hasRoutine && (
-        <div className="mt-8">
-          <p className="max-w-prose text-sm leading-relaxed text-ink-soft">
-            The same moves as a daily sequence — the order to apply things.
-            Introduce one new product at a time; give each two weeks before the
-            next.
-          </p>
-          <div className="mt-6 grid divide-y divide-line rounded-2xl border border-line md:grid-flow-col md:auto-cols-fr md:divide-x md:divide-y-0">
+      {/* ── ③ EVERY DAY ───────────────────────────────────────────────── */}
+      {hasRoutine && (
+        <Step
+          num={3}
+          title="Every day, this is the rhythm"
+          sub="The order to apply things once you have the products. Introduce one new product at a time — give each two weeks before the next."
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
             {(Object.keys(SLOT_META) as RoutineSlot[]).map((slot) => {
               const steps = routineBySlot(slot);
               if (steps.length === 0) return null;
               const meta = SLOT_META[slot];
               return (
-                <div key={slot} className="px-6 py-7">
-                  <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                    {meta.sub} /
-                  </p>
-                  <h3 className="mt-2 font-display text-xl text-ink">
-                    <span aria-hidden className="mr-2 text-pine">
-                      {meta.icon}
-                    </span>
+                <div key={slot} className="rounded-2xl border border-line bg-surface p-5">
+                  <p className="text-xs font-medium text-ink-soft">{meta.cap}</p>
+                  <h4 className="mt-1 flex items-center gap-2 font-display text-lg font-medium text-ink">
+                    <span aria-hidden className="text-pine">{meta.glyph}</span>
                     {meta.title}
-                  </h3>
-                  <ol className="mt-4 space-y-2.5">
+                  </h4>
+                  <ol className="mt-4 grid gap-2.5">
                     {steps.map((step, i) => (
-                      <li key={i} className="flex items-baseline gap-3 text-sm leading-relaxed text-ink">
-                        <span className="w-4 shrink-0 font-mono text-xs text-pine">
+                      <li key={i} className="flex gap-2.5 text-[13.5px] leading-snug text-ink">
+                        <span className="w-3.5 shrink-0 font-medium text-pine tabular-nums">
                           {i + 1}
                         </span>
                         <span>{step.step}</span>
@@ -240,111 +144,159 @@ export default function MovePlan({
               );
             })}
           </div>
-        </div>
+        </Step>
       )}
 
-      {/* ── SHOPPING + CHECKPOINTS — collapsed reference ──────────────── */}
-      {hasShopping && (
-        <details className="group mt-10 overflow-hidden rounded-2xl border border-line">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-6 py-5 hover:bg-[#FCFCFD] focus-visible:outline focus-visible:outline-2 focus-visible:outline-pine">
-            <div>
-              <p className="font-display text-lg text-ink">Shopping list &amp; checkpoints</p>
-              <p className="mt-0.5 text-sm text-ink-soft">
-                {(plan.shoppingList ?? []).length > 0
-                  ? `${plan.shoppingList.length} product ${
-                      plan.shoppingList.length === 1 ? "category" : "categories"
-                    } to buy, with price bands`
-                  : "Your re-photo checkpoints"}
-                . Examples, not endorsements — no affiliate links, ever.
-              </p>
-            </div>
-            <span
-              aria-hidden
-              className="ml-auto shrink-0 text-ink-soft transition-transform group-open:rotate-180"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </summary>
-
-          <div className="grid divide-y divide-line border-t border-line lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:divide-x lg:divide-y-0">
-            {(plan.shoppingList ?? []).length > 0 && (
-              <ul className="divide-y divide-line">
-                {plan.shoppingList.map((item) => (
-                  <li
-                    key={item.item}
-                    className="grid gap-1 px-6 py-4 sm:grid-cols-[1fr_auto] sm:items-baseline sm:gap-4"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[15px] text-ink">{item.item}</p>
-                      <p className="mt-0.5 text-xs text-ink-soft">e.g. {item.examples}</p>
-                    </div>
-                    <span className="shrink-0 font-mono text-xs text-ink-soft">
-                      {item.approxCost}
+      {/* ── ④ LATER ───────────────────────────────────────────────────── */}
+      {laterPhases.length > 0 && (
+        <Step
+          num={4}
+          title="Then, as these stick"
+          sub="The bigger levers — start these once this week's moves feel automatic. No rush; the stack is what works, not the speed."
+        >
+          <div className="overflow-hidden rounded-2xl border border-line">
+            {laterPhases.map((p) => {
+              const moves = movesFor(p.suggestionIds);
+              const done = moves.filter((m) => isDone(m.id)).length;
+              return (
+                <details
+                  key={p.number}
+                  open={p.number === 2}
+                  className="group border-b border-line last:border-b-0"
+                >
+                  <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 hover:bg-[#FCFCFD]">
+                    <span className="font-medium text-[15px] text-ink">{p.title}</span>
+                    <span className="text-[13px] text-ink-soft">{p.window}</span>
+                    <span className="ml-auto text-[13px] tabular-nums text-ink-soft">
+                      {done}/{moves.length}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {(plan.checkpoints ?? []).length > 0 && (
-              <div className="px-6 py-6">
-                <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                  Checkpoints /
-                </p>
-                <ol className="mt-4 space-y-4">
-                  {plan.checkpoints.map((cp) => (
-                    <li key={cp.week} className="flex items-baseline gap-4">
-                      <span className="w-9 shrink-0 font-mono text-xs text-pine">
-                        w{cp.week}
-                      </span>
-                      <p className="text-sm leading-relaxed text-ink">{cp.lookFor}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
+                    <Chevron className="group-open:rotate-180" />
+                  </summary>
+                  <ul className="border-t border-line">
+                    {moves.map((m) => (
+                      <li key={m.id} className="flex items-center gap-3 border-t border-line px-5 py-3 first:border-t-0">
+                        <Check done={isDone(m.id)} onClick={() => toggle(m.id)} label={m.suggestion.title} />
+                        <span
+                          className={`flex-1 text-sm ${
+                            isDone(m.id) ? "text-ink-soft line-through decoration-line" : "text-ink"
+                          }`}
+                        >
+                          {m.suggestion.title}
+                        </span>
+                        <span className="flex items-center gap-1.5 text-[11px] text-ink-soft">
+                          <i className="h-2 w-2 rounded-full" style={{ backgroundColor: CATEGORY_META[m.category].color }} />
+                          {CATEGORY_META[m.category].label}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              );
+            })}
           </div>
+        </Step>
+      )}
+
+      {/* Milestones — quiet, collapsed. What to look for as you go. */}
+      {(plan.checkpoints ?? []).length > 0 && (
+        <details className="group mt-8 overflow-hidden rounded-2xl border border-line bg-surface">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4">
+            <span className="font-medium text-[15px] text-ink">What to look for along the way</span>
+            <span className="ml-auto text-[13px] text-ink-soft">{plan.checkpoints.length} checkpoints</span>
+            <Chevron className="group-open:rotate-180" />
+          </summary>
+          <ol className="border-t border-line">
+            {plan.checkpoints.map((cp) => (
+              <li key={cp.week} className="flex gap-4 border-t border-line px-5 py-4 first:border-t-0">
+                <span className="w-10 shrink-0 font-medium text-pine">wk {cp.week}</span>
+                <p className="text-sm leading-relaxed text-ink-soft">{cp.lookFor}</p>
+              </li>
+            ))}
+          </ol>
         </details>
       )}
-
-      <p className="mt-8 text-xs leading-relaxed text-ink-soft">
-        Every move&apos;s full detail — and the impact-vs-effort map — lives in the
-        Analysis tab.
-      </p>
     </section>
   );
 }
 
-/** Small check-off button shared by the this-week cards and the coming-up rows. */
-function CheckButton({
-  done,
-  onClick,
+/* ── One numbered step block ──────────────────────────────────────────── */
+function Step({
+  num,
   title,
+  sub,
+  meta,
+  children,
 }: {
-  done: boolean;
-  onClick: () => void;
+  num: number;
   title: string;
+  sub?: string;
+  meta?: string;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={done}
-      aria-label={`Mark "${title}" ${done ? "not done" : "done"}`}
-      onClick={onClick}
-      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs transition-colors ${
-        done
-          ? "border-pine bg-pine text-paper"
-          : "border-line bg-paper text-transparent hover:border-pine/50"
-      }`}
-    >
-      ✓
-    </button>
+    <div className="mt-11 border-t border-line pt-9 first-of-type:mt-10">
+      <div className="flex items-center gap-4">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sage font-display text-[15px] font-semibold text-pine">
+          {num}
+        </span>
+        <h3 className="font-display text-xl font-medium tracking-tight text-ink">{title}</h3>
+        {meta && <span className="ml-auto text-[13px] tabular-nums text-ink-soft">{meta}</span>}
+      </div>
+      {sub && <p className="ml-12 mt-1.5 max-w-[52ch] text-[14.5px] leading-relaxed text-ink-soft">{sub}</p>}
+      <div className="ml-0 mt-6 sm:ml-12">{children}</div>
+    </div>
   );
 }
 
-/** A this-week move: check it off, or tap the body to open the full detail. */
+/* ── Step ① buy list ──────────────────────────────────────────────────── */
+function BuyList({
+  shopping,
+  titleById,
+}: {
+  shopping: Plan["shoppingList"];
+  titleById: (id?: string) => string | undefined;
+}) {
+  const [bought, setBought] = useState<Record<string, boolean>>({});
+  return (
+    <div className="grid gap-2.5">
+      {shopping.map((item) => {
+        const optional = /^optional:?\s*/i.test(item.item);
+        const name = item.item.replace(/^optional:?\s*/i, "");
+        const forMove = titleById(item.suggestionId);
+        const on = bought[item.item] ?? false;
+        return (
+          <div
+            key={item.item}
+            className={`flex items-start gap-3.5 rounded-xl border bg-surface px-4 py-3.5 transition-colors ${
+              on ? "border-line" : "border-line hover:border-[#d3d8dc]"
+            }`}
+          >
+            <Check done={on} onClick={() => setBought((b) => ({ ...b, [item.item]: !on }))} label={name} />
+            <div className="min-w-0 flex-1">
+              <p className={`text-[15px] font-medium ${on ? "text-ink-soft line-through decoration-line" : "text-ink"}`}>
+                {name}
+                {optional && (
+                  <span className="ml-2 rounded-full border border-line px-2 py-0.5 align-middle text-[11px] font-normal text-ink-soft">
+                    optional
+                  </span>
+                )}
+              </p>
+              <p className="mt-0.5 text-[13px] leading-snug text-ink-soft">
+                {forMove ? <>For <span className="text-ink">{forMove.toLowerCase()}</span> · </> : null}
+                e.g. {item.examples}
+              </p>
+            </div>
+            <span className="shrink-0 self-center rounded-full bg-clay-soft px-2.5 py-1 text-[12.5px] font-semibold tabular-nums text-clay">
+              {item.approxCost}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Step ② move card (expandable) ────────────────────────────────────── */
 function MoveCard({
   flat,
   done,
@@ -356,13 +308,12 @@ function MoveCard({
 }) {
   const [open, setOpen] = useState(false);
   const s = flat.suggestion;
-  const slot = s.routineSlot ? SLOT_META[s.routineSlot].title : null;
-  const quick = isQuickWin(s);
+  const why1 = oneLiner(s.why || s.detail);
 
   return (
-    <li className="overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-pine/30">
-      <div className="flex items-start gap-3 px-4 py-3.5">
-        <CheckButton done={done} onClick={() => onToggle(flat.id)} title={s.title} />
+    <div className="overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-[#d3d8dc]">
+      <div className="flex items-start gap-3.5 px-4 py-3.5">
+        <Check done={done} onClick={() => onToggle(flat.id)} label={s.title} />
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -370,105 +321,91 @@ function MoveCard({
           className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left"
         >
           <span className="min-w-0">
-            <span
-              className={`block text-[15px] font-medium leading-snug ${
-                done ? "text-ink-soft line-through decoration-line" : "text-ink"
-              }`}
-            >
+            <span className={`block text-[15px] font-medium leading-snug ${done ? "text-ink-soft line-through decoration-line" : "text-ink"}`}>
               {s.title}
             </span>
-            <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                <i
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: CATEGORY_META[flat.category].color }}
-                />
-                {CATEGORY_META[flat.category].label}
-              </span>
-              {slot && (
-                <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                  {slot}
-                </span>
-              )}
-              <span className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                {COST_GLYPH[s.cost] ?? "$"}
-              </span>
-              {quick && (
-                <span className="rounded-full bg-clay-soft px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.08em] text-clay">
-                  Quick win
-                </span>
-              )}
-            </span>
+            {why1 && <span className="mt-1 block text-[13.5px] leading-snug text-ink-soft">{why1}</span>}
           </span>
-          <span
-            aria-hidden
-            className={`mt-1 shrink-0 text-ink-soft transition-transform ${
-              open ? "rotate-180" : ""
-            }`}
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </span>
+          <Chevron className={`mt-0.5 ${open ? "rotate-180" : ""}`} />
         </button>
       </div>
 
       {open && (
-        <div className="space-y-3 border-t border-line px-4 pb-4 pt-3 pl-[52px] text-sm leading-relaxed text-ink-soft">
-          <p>{s.detail}</p>
+        <div className="border-t border-line px-4 pb-5 pt-4 sm:pl-[54px]">
+          <p className="text-[14.5px] leading-relaxed text-ink-soft">{s.detail}</p>
+
           {s.why && (
-            <p className="rounded-xl bg-sage/50 px-4 py-3 text-pine-deep">
-              <span className="font-medium">Why you: </span>
+            <p className="mt-3.5 rounded-xl bg-sage px-4 py-3 text-[14px] leading-relaxed text-pine-deep">
+              <span className="font-semibold">Why you: </span>
               {s.why}
             </p>
           )}
+
           {s.how && s.how.length > 0 && (
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                How to do it
-              </p>
-              <ol className="mt-2 space-y-1.5">
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">How to do it</p>
+              <ol className="mt-2.5 grid gap-2">
                 {s.how.map((step, i) => (
-                  <li key={i} className="flex items-baseline gap-2.5 text-ink">
-                    <span className="w-5 shrink-0 font-mono text-[11px] text-pine">
-                      {i + 1}.
-                    </span>
+                  <li key={i} className="flex gap-3 text-[14px] leading-relaxed text-ink">
+                    <span className="w-4 shrink-0 font-semibold text-pine tabular-nums">{i + 1}</span>
                     <span>{step}</span>
                   </li>
                 ))}
               </ol>
             </div>
           )}
+
           {s.products && s.products.length > 0 && (
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-label text-ink-soft">
-                What to use
-              </p>
-              <ul className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft">What to use</p>
+              <ul className="mt-2.5 flex flex-wrap gap-2">
                 {s.products.map((p) => (
-                  <li
-                    key={p}
-                    className="rounded-full border border-line bg-paper px-3 py-1 text-xs text-ink-soft"
-                  >
+                  <li key={p} className="rounded-full border border-line bg-paper px-3 py-1.5 text-[12.5px] text-ink">
                     {p}
                   </li>
                 ))}
               </ul>
             </div>
           )}
-          {(s.frequency || s.timeline || s.evidence) && (
-            <p className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line pt-3 font-mono text-[10px] uppercase tracking-label text-ink-soft">
-              {s.frequency && <span>⟳ {s.frequency}</span>}
-              {s.timeline && <span>Results: {s.timeline}</span>}
-              {s.evidence && (
-                <span className={s.evidence === "strong" ? "text-pine" : undefined}>
-                  Evidence: {s.evidence}
-                </span>
-              )}
-            </p>
+
+          {(s.frequency || s.timeline) && (
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3.5 text-[13px] text-ink-soft">
+              {s.frequency && <span><span className="font-semibold text-ink">How often</span> · {s.frequency}</span>}
+              {s.timeline && <span><span className="font-semibold text-ink">Results</span> · {s.timeline}</span>}
+            </div>
           )}
         </div>
       )}
-    </li>
+    </div>
+  );
+}
+
+/* ── shared bits ──────────────────────────────────────────────────────── */
+function Check({ done, onClick, label }: { done: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={done}
+      aria-label={`Mark "${label}" ${done ? "not done" : "done"}`}
+      onClick={onClick}
+      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border transition-colors ${
+        done ? "border-pine bg-pine text-paper" : "border-line bg-paper text-transparent hover:border-pine/50"
+      }`}
+    >
+      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </button>
+  );
+}
+
+function Chevron({ className = "" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`shrink-0 text-ink-soft transition-transform ${className}`}>
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </span>
   );
 }

@@ -16,6 +16,8 @@ import LockedScanHook from "@/components/LockedScanHook";
 import FullPlanBuilder from "@/components/FullPlanBuilder";
 import PostPurchaseSetup from "@/components/PostPurchaseSetup";
 import MemberTabs from "@/components/MemberTabs";
+import AnalysisTab from "@/components/AnalysisTab";
+import LockedPlanTab from "@/components/LockedPlanTab";
 import PlanBoard from "@/components/PlanBoard";
 import MovePlan from "@/components/MovePlan";
 import ReportSection from "@/components/ReportSection";
@@ -126,6 +128,12 @@ export default async function PersonPage({
   // the single selling scroll.
   const fullMember = !locked && planReady && hasFullPlan(person);
 
+  // A locked visitor whose full plan already exists gets the SAME tabbed layout,
+  // blurred: Overview stays sharp (the sell), the plan and analysis blur behind
+  // the paywall with one move revealed. A teaser (no full plan yet) falls back to
+  // the single selling scroll below.
+  const lockedFull = locked && planReady && !!plan && hasFullPlan(person);
+
   // The observations act ("what the photos show") is reused in both layouts.
   const observationsSection = (num: string) => (
     <ReportSection
@@ -169,7 +177,7 @@ export default async function PersonPage({
         locked ? "pb-32" : ""
       }`}
     >
-      <PersonHero person={person} />
+      <PersonHero person={person} unlocked={unlocked} />
 
       {building ? (
         /* Just unlocked. A guest first creates their account + fills in their
@@ -211,16 +219,7 @@ export default async function PersonPage({
               {
                 id: "analysis",
                 label: "Analysis",
-                content: (
-                  <>
-                    <AdviceBoard
-                      advice={person.advice}
-                      startNum={1}
-                      freeKey={freeKey}
-                    />
-                    {observationsSection("03")}
-                  </>
-                ),
+                content: <AnalysisTab person={person} />,
               },
               {
                 id: "progress",
@@ -233,6 +232,38 @@ export default async function PersonPage({
                     checkins={checkins}
                   />
                 ),
+              },
+            ]}
+          />
+        </ProgressProvider>
+      ) : lockedFull && plan ? (
+        /* Locked, but the full plan exists — the paid tabbed layout, blurred.
+           Overview sells sharp; Plan + Analysis blur with one move on the house.
+           No Progress tab (that's a member feature). */
+        <ProgressProvider personId={person.id} initial={progress}>
+          <MemberTabs
+            tabs={[
+              {
+                id: "overview",
+                label: "Overview",
+                content: <HaloGlance person={person} locked />,
+              },
+              {
+                id: "plan",
+                label: "Your plan",
+                content: (
+                  <LockedPlanTab
+                    plan={plan}
+                    advice={person.advice}
+                    free={free}
+                    personId={person.id}
+                  />
+                ),
+              },
+              {
+                id: "analysis",
+                label: "Analysis",
+                content: <AnalysisTab person={person} locked free={free} />,
               },
             ]}
           />
