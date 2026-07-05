@@ -24,10 +24,19 @@ export interface MemberTab {
 export default function MemberTabs({ tabs }: { tabs: MemberTab[] }) {
   const [active, setActive] = useState(tabs[0]?.id);
 
-  // Restore the tab from the URL hash on mount (e.g. a shared /person/x#plan).
+  // Restore the tab from the URL hash on mount (e.g. a shared /person/x#plan),
+  // and follow in-page links to another tab (e.g. Overview's "See your plan").
   useEffect(() => {
-    const fromHash = window.location.hash.replace(/^#/, "");
-    if (fromHash && tabs.some((t) => t.id === fromHash)) setActive(fromHash);
+    const sync = () => {
+      const fromHash = window.location.hash.replace(/^#/, "");
+      if (fromHash && tabs.some((t) => t.id === fromHash)) {
+        setActive(fromHash);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    };
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
   }, [tabs]);
 
   const current = tabs.find((t) => t.id === active) ?? tabs[0];
@@ -60,7 +69,7 @@ export default function MemberTabs({ tabs }: { tabs: MemberTab[] }) {
                 role="tab"
                 aria-selected={on}
                 onClick={() => select(t.id)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 font-mono text-[11px] uppercase tracking-label transition-colors ${
+                className={`shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium transition-colors ${
                   on
                     ? "bg-pine text-paper"
                     : "text-ink-soft hover:bg-chip hover:text-ink"
