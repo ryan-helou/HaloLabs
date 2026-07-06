@@ -67,7 +67,7 @@ const STEPS = [
   },
   {
     title: "Add guided photos",
-    body: "Six specific shots with framing and lighting guidance (front, smile, profiles, 3/4, detail). Everything stays on your machine.",
+    body: "Six specific shots with framing and lighting guidance (front, smile, profiles, 3/4, detail). Your photos are used only to build your plan — never to train models, and deleted when you delete your account.",
   },
   {
     title: "Get your plan",
@@ -109,7 +109,7 @@ const FAQ = [
   },
   {
     q: "Is my data private?",
-    a: "Yes. Your photos and results live in a folder on your machine. This viewer only reads the local results file — nothing is uploaded anywhere.",
+    a: "Your photos are used only to generate your plan and are never used to train any model. They're stored privately, tied to your account, and permanently deleted the moment you delete your account — delete means delete.",
   },
   {
     q: "Can I really improve without surgery?",

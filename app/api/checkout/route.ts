@@ -59,14 +59,35 @@ export async function POST(req: Request) {
     /* no body is fine */
   }
 
+  // The buyer almost always checks out from their plan page (/person/<id>).
+  // Carry that personId so the webhook can DURABLY enqueue the paid full-plan
+  // even if the buyer closes the tab (the client trigger is now only a fallback).
+  const personMatch = returnTo.match(/^\/person\/([^/?#]+)/);
+  const personId = personMatch ? decodeURIComponent(personMatch[1]) : "";
+
+  // First-touch marketing attribution captured at scan time, flattened onto the
+  // Stripe session + subscription so the webhook can credit the sale to the
+  // content that drove it (Stripe metadata: <=50 keys, <=500 chars each).
+  const attr = (user.attribution ?? {}) as Record<string, unknown>;
+  const attrMeta: Record<string, string> = {};
+  for (const [k, v] of Object.entries(attr)) {
+    if (v == null) continue;
+    attrMeta[`attr_${k}`.slice(0, 40)] = String(v).slice(0, 480);
+  }
+  const meta = { userId: user.id, ...(personId ? { personId } : {}), ...attrMeta };
+
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
     line_items: [{ price: STRIPE.priceId, quantity: 1 }],
     success_url: `${appUrl()}${returnTo}?upgraded=1`,
     cancel_url: `${appUrl()}${returnTo}`,
-    metadata: { userId: user.id },
-    subscription_data: { metadata: { userId: user.id } },
+    client_reference_id:
+      (typeof attr.utm_campaign === "string" && attr.utm_campaign) ||
+      (typeof attr.utm_source === "string" && attr.utm_source) ||
+      undefined,
+    metadata: meta,
+    subscription_data: { metadata: meta },
     allow_promotion_codes: true,
     // A 100%-off promo (the friends code) makes the total $0; without this,
     // subscription mode would still force a card. "if_required" lets a fully

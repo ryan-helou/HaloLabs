@@ -29,7 +29,7 @@ interface IntakeStatus {
 type AnalysisState =
   | { phase: "idle" }
   | { phase: "starting" }
-  | { phase: "running"; elapsedSec: number }
+  | { phase: "running"; elapsedSec: number; queuePosition?: number }
   | { phase: "done" }
   | { phase: "error"; hint: string };
 
@@ -181,7 +181,11 @@ export default function CaptureFlow() {
         const res = await fetch(`/api/analyze?id=${encodeURIComponent(id)}`);
         const data = await res.json();
         if (data.state === "running") {
-          setAnalysis({ phase: "running", elapsedSec: data.elapsedSec ?? 0 });
+          setAnalysis({
+            phase: "running",
+            elapsedSec: data.elapsedSec ?? 0,
+            queuePosition: data.queued ? data.queuePosition : undefined,
+          });
         } else if (data.state === "done") {
           setAnalysis({ phase: "done" });
         } else if (data.state === "error") {
@@ -396,10 +400,18 @@ export default function CaptureFlow() {
               and style — to build your free scan. This usually takes a minute
               or two.
             </p>
-            {analysis.phase === "running" && analysis.elapsedSec > 0 && (
-              <p className="mt-3 font-mono text-xs text-ink-soft">
-                {Math.floor(analysis.elapsedSec / 60)}m {analysis.elapsedSec % 60}s elapsed
+            {analysis.phase === "running" && analysis.queuePosition ? (
+              <p className="mt-3 rounded-full border border-pine/30 bg-sage/40 px-4 py-1.5 text-sm font-medium text-pine">
+                You&apos;re #{analysis.queuePosition} in line — lots of scans
+                right now. Yours starts automatically.
               </p>
+            ) : (
+              analysis.phase === "running" &&
+              analysis.elapsedSec > 0 && (
+                <p className="mt-3 font-mono text-xs text-ink-soft">
+                  {Math.floor(analysis.elapsedSec / 60)}m {analysis.elapsedSec % 60}s elapsed
+                </p>
+              )
             )}
             <WaitSteps
               elapsedSec={analysis.phase === "running" ? analysis.elapsedSec : 0}

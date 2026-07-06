@@ -72,6 +72,29 @@ export default function PrivacyPage() {
         </section>
 
         <section>
+          <h2 className="font-display text-xl text-ink">Cookies &amp; analytics</h2>
+          <p className="mt-2 text-ink-soft">
+            We use privacy-first, cookieless analytics (Plausible) — no
+            cross-site tracking and no advertising profiles. We do set one
+            first-party, functional cookie that remembers which link or campaign
+            first brought you here, so we can measure which of our own content
+            works. It isn&apos;t shared with third parties and contains no
+            personal data.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="font-display text-xl text-ink">Sharing</h2>
+          <p className="mt-2 text-ink-soft">
+            If you choose to create a share link, it shows only neutral counts
+            and your plan&apos;s composition (and, for a progress share, how many
+            moves you&apos;ve completed) — never your photos, your name, or the
+            written plan. Share links are opt-in and you can revoke them at any
+            time; deleting your account removes them.
+          </p>
+        </section>
+
+        <section>
           <h2 className="font-display text-xl text-ink">Your choices</h2>
           <p className="mt-2 text-ink-soft">
             You may request access to, correction of, or deletion of your data,
