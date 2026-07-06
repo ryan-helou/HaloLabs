@@ -7,6 +7,7 @@ import { getPhoto } from "./storage";
 import { orderCapturePhotos } from "./photo";
 import { anthropicConfigured } from "./env";
 import { resolvePersonDir, IMAGE_EXTS, contentTypeFor } from "./paths";
+import { JOB_LEASE_MS, recoverOrphans } from "./queue";
 import type { Person } from "./types";
 
 /**
@@ -552,14 +553,11 @@ async function writeResult(
 // process the job inline so `npm run dev` works without a second process.
 
 // Dev/transition convenience: process enqueued jobs in-process. On by default
-// off production; set WORKER_INLINE=1 to force it, =0 to force it off.
+// off production; set WORKER_INLINE=1 to force it (the interim stopgap before a
+// dedicated worker service exists), =0 to force it off.
 const INLINE_WORKER =
   process.env.WORKER_INLINE === "1" ||
   (process.env.WORKER_INLINE !== "0" && process.env.NODE_ENV !== "production");
-
-// How long a claimed job's lease lasts before the recovery sweep assumes the
-// worker died and requeues it. Comfortably longer than the model timeout+retries.
-export const JOB_LEASE_MS = 12 * 60 * 1000;
 
 type PreparedJob = {
   id: string;
@@ -645,39 +643,87 @@ export async function processJob(jobId: string): Promise<void> {
   }
 }
 
-/**
- * Inline processing for dev / transition: atomically claim the just-enqueued job
- * (WHERE status=QUEUED, so if a real worker grabbed it first this is a no-op)
- * then process it. Fire-and-forget safe.
- */
-async function processInline(jobId: string): Promise<void> {
-  const claimed = await prisma.analysisJob.updateMany({
-    where: { id: jobId, status: "QUEUED" },
-    data: {
-      status: "RUNNING",
-      startedAt: new Date(),
-      leaseUntil: new Date(Date.now() + JOB_LEASE_MS),
-      attempts: { increment: 1 },
-    },
-  });
-  if (claimed.count === 0) return; // a worker already claimed it
-  await processJob(jobId);
+// ── Bounded inline processing (dev + the WORKER_INLINE stopgap) ──────────────
+// When the web process handles jobs itself, it MUST bound concurrency or a viral
+// spike fires unbounded simultaneous Claude calls (each loading base64 images)
+// and OOMs the box. This semaphore caps in-process jobs; the excess wait as
+// resolved-later promises while their rows stay QUEUED (durable). The dedicated
+// worker service has its own batch-based cap and does not use this path.
+const INLINE_CONCURRENCY = Number(process.env.WORKER_CONCURRENCY) || 4;
+let inlineActive = 0;
+const inlineWaiters: (() => void)[] = [];
+
+function inlineAcquire(): Promise<void> {
+  if (inlineActive < INLINE_CONCURRENCY) {
+    inlineActive++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => inlineWaiters.push(resolve));
+}
+function inlineRelease(): void {
+  const next = inlineWaiters.shift();
+  if (next) next(); // hand the slot to the next waiter (count unchanged)
+  else inlineActive--;
 }
 
-/** Enqueue the free teaser scan. The worker (or inline dev) processes it. */
+// Opportunistic orphan recovery for the inline path (the dedicated worker does
+// its own). Throttled to at most once/minute per process so it costs ~nothing.
+let lastRecoverAt = 0;
+async function maybeRecoverInline(): Promise<void> {
+  const now = Date.now();
+  if (now - lastRecoverAt < 60_000) return;
+  lastRecoverAt = now;
+  try {
+    await recoverOrphans();
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Inline processing for dev / the WORKER_INLINE stopgap: bounded by the
+ * semaphore, then atomically claim the job (WHERE status=QUEUED, so if a real
+ * worker grabbed it first this is a no-op) and process it. Fire-and-forget safe.
+ */
+async function processInline(jobId: string): Promise<void> {
+  await inlineAcquire();
+  try {
+    const claimed = await prisma.analysisJob.updateMany({
+      where: { id: jobId, status: "QUEUED" },
+      data: {
+        status: "RUNNING",
+        startedAt: new Date(),
+        leaseUntil: new Date(Date.now() + JOB_LEASE_MS),
+        attempts: { increment: 1 },
+      },
+    });
+    if (claimed.count === 0) return; // a worker (or another inline call) claimed it
+    await processJob(jobId);
+  } finally {
+    inlineRelease();
+  }
+}
+
+/** Enqueue the free teaser scan. The worker (or inline stopgap) processes it. */
 export async function startAnalysis(userId: string, personId: string): Promise<string> {
   const job = await prisma.analysisJob.create({
     data: { userId, personId, status: "QUEUED", jobType: "TEASER" },
   });
-  if (INLINE_WORKER) void processInline(job.id);
+  if (INLINE_WORKER) {
+    void maybeRecoverInline();
+    void processInline(job.id);
+  }
   return job.id;
 }
 
-/** Enqueue the paid full-plan generation. The worker (or inline dev) processes it. */
+/** Enqueue the paid full-plan generation. The worker (or inline stopgap) processes it. */
 export async function startFullPlan(userId: string, personId: string): Promise<string> {
   const job = await prisma.analysisJob.create({
     data: { userId, personId, status: "QUEUED", jobType: "FULL" },
   });
-  if (INLINE_WORKER) void processInline(job.id);
+  if (INLINE_WORKER) {
+    void maybeRecoverInline();
+    void processInline(job.id);
+  }
   return job.id;
 }

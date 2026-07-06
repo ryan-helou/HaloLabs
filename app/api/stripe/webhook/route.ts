@@ -6,16 +6,8 @@ import { STRIPE } from "@/lib/env";
 import { startFullPlan } from "@/lib/analyze";
 import { hasFullPlan } from "@/lib/plan";
 import { sendServerEvent } from "@/lib/analytics-server";
+import { readAttribution } from "@/lib/attribution";
 import type { Person } from "@/lib/types";
-
-/** Pull the attr_* keys out of Stripe metadata back into a plain attribution map. */
-function readAttribution(md: Stripe.Metadata | null | undefined): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(md ?? {})) {
-    if (k.startsWith("attr_") && typeof v === "string") out[k.slice(5)] = v;
-  }
-  return out;
-}
 
 /**
  * DURABLY enqueue the paid full plan after payment — the fix for "pay, close the
