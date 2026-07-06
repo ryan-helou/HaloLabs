@@ -28,11 +28,18 @@ model User {
   // webhook flips this in Phase 3. Anything else (the default) keeps it locked.
   subscriptionStatus String @default("inactive")
 
+  // First-touch marketing attribution captured at the first landing view
+  // (utm_source/medium/campaign/content/term, referrer, landing_path, ts).
+  // Stamped once on the guest User at scan time and carried through to the
+  // purchase webhook so a sale can be credited to the content that drove it.
+  attribution Json?
+
   accounts Account[]
   sessions Session[]
   people   Person[]
   jobs     AnalysisJob[]
   progress Progress[]
+  conversions Conversion[]
 }
 
 model Account {
@@ -84,6 +91,13 @@ model Person {
   profile     Json?
   createdAt   DateTime @default(now())
 
+  // Opaque, unguessable public share id (base64url). Null = not shared. Distinct
+  // from `id` so the private /person/<id> page is never implicated; maps to a
+  // PII-stripped projection (lib/share.ts), never the full record.
+  shareToken String? @unique
+  // What the share emphasizes: "plan" (counts/composition) | "progress" (delta).
+  shareKind  String?
+
   user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   photos  Photo[]
   jobs    AnalysisJob[]
@@ -110,7 +124,9 @@ model Progress {
 model Photo {
   id           String   @id @default(cuid())
   personId     String
-  // Object key in the R2 bucket; photos are never stored on the app server
+  // Storage key (`people/<personId>/<file>`). When R2 is configured the bytes
+  // live in R2 under this key; otherwise they live in PhotoBlob under the same
+  // key (shared Postgres, reachable by both web and the worker service).
   r2Key        String   @unique
   originalName String?
   contentType  String?
@@ -122,6 +138,18 @@ model Photo {
   @@index([personId])
 }
 
+// Photo bytes stored in Postgres — the shared-storage fallback used when R2
+// isn't configured, so the separate worker service can read photos over the
+// same DB connection instead of a volume it can't reach. Keyed by the same
+// storage key as Photo.r2Key. Swap to R2/MinIO later by setting R2_* — no app
+// changes needed (lib/storage picks the backend).
+model PhotoBlob {
+  key         String   @id
+  data        Bytes
+  contentType String
+  createdAt   DateTime @default(now())
+}
+
 enum JobStatus {
   QUEUED
   RUNNING
@@ -129,12 +157,26 @@ enum JobStatus {
   FAILED
 }
 
+// Which analysis body the worker should run for this job. TEASER = the cheap
+// free scan (frontal shots only); FULL = the paid deep plan (all photos).
+enum JobType {
+  TEASER
+  FULL
+}
+
 model AnalysisJob {
   id       String    @id @default(cuid())
   userId   String
   personId String
   status   JobStatus @default(QUEUED)
+  jobType  JobType   @default(TEASER)
   error    String?
+
+  // Retry budget: the worker bumps this on each claim; >= 3 → give up (FAILED).
+  attempts Int @default(0)
+  // Crash recovery lease. A RUNNING job whose lease has expired is assumed
+  // orphaned (worker died / redeploy) and is requeued by the recovery sweep.
+  leaseUntil DateTime?
 
   // Unit economics: track what each analysis actually costs
   inputTokens  Int?
@@ -151,6 +193,25 @@ model AnalysisJob {
 
   @@index([status, createdAt])
   @@index([personId])
+}
+
+// A completed purchase, recorded server-side from the Stripe webhook so revenue
+// can be attributed to the campaign that produced it — independent of whether
+// the buyer's browser ever returned to fire a client event.
+model Conversion {
+  id              String   @id @default(cuid())
+  userId          String?
+  amountCents     Int      @default(0)
+  currency        String?
+  attribution     Json?
+  // Stripe checkout session id — unique so a redelivered webhook can't
+  // double-count the same purchase.
+  stripeSessionId String?  @unique
+  createdAt       DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
 }
 
 model AnalysisResult {

@@ -486,7 +486,13 @@ async function markFailed(jobId: string, err: unknown): Promise<void> {
   });
 }
 
-async function loadJob(jobId: string) {
+/**
+ * Load a claimed job with its person. The QUEUED→RUNNING transition is the
+ * claimer's job now (the worker's atomic `FOR UPDATE SKIP LOCKED` claim, or the
+ * inline dev claim below) — this only loads and fails fast if analysis isn't
+ * configured.
+ */
+async function prepareJob(jobId: string) {
   const job = await prisma.analysisJob.findUnique({
     where: { id: jobId },
     include: { person: true },
@@ -496,10 +502,6 @@ async function loadJob(jobId: string) {
     await markFailed(jobId, new Error("Analysis is not configured (missing ANTHROPIC_API_KEY)."));
     return null;
   }
-  await prisma.analysisJob.update({
-    where: { id: jobId },
-    data: { status: "RUNNING", startedAt: new Date() },
-  });
   return job;
 }
 
@@ -541,140 +543,141 @@ async function writeResult(
   ]);
 }
 
-// ── In-process concurrency cap ──────────────────────────────────────────────
-// Jobs run fire-and-forget in the Next server process. Without a limit, a viral
-// spike would spawn hundreds of simultaneous Claude calls — each holding
-// base64 images in memory + sharp CPU — which OOMs the container and blows the
-// Anthropic rate limit. This gates how many analyses run at once; the rest wait
-// their turn (their DB row stays QUEUED, so the poller still shows "building").
-// A durable queue + separate worker is the next step past this; the cap is the
-// cheap insurance that keeps a spike from taking the box down.
-const MAX_CONCURRENT_JOBS = Number(process.env.ANALYSIS_CONCURRENCY) || 4;
-let activeJobs = 0;
-const jobWaiters: (() => void)[] = [];
+// ── Job processors ──────────────────────────────────────────────────────────
+// Jobs are drained from the AnalysisJob table by a separate worker process
+// (worker/index.ts) that claims rows atomically (FOR UPDATE SKIP LOCKED) and
+// calls processJob() on each. Concurrency, retries, and crash recovery live in
+// the worker + lib/queue.ts — this module just knows how to RUN one already-
+// claimed job. In dev (or WORKER_INLINE=1) startAnalysis/startFullPlan also
+// process the job inline so `npm run dev` works without a second process.
 
-function acquireSlot(): Promise<void> {
-  if (activeJobs < MAX_CONCURRENT_JOBS) {
-    activeJobs++;
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => jobWaiters.push(resolve));
+// Dev/transition convenience: process enqueued jobs in-process. On by default
+// off production; set WORKER_INLINE=1 to force it, =0 to force it off.
+const INLINE_WORKER =
+  process.env.WORKER_INLINE === "1" ||
+  (process.env.WORKER_INLINE !== "0" && process.env.NODE_ENV !== "production");
+
+// How long a claimed job's lease lasts before the recovery sweep assumes the
+// worker died and requeues it. Comfortably longer than the model timeout+retries.
+export const JOB_LEASE_MS = 12 * 60 * 1000;
+
+type PreparedJob = {
+  id: string;
+  personId: string;
+  jobType: "TEASER" | "FULL";
+  person: { displayName: string; profile: unknown };
+};
+
+/** The FREE teaser: observations + tagged move list (one revealed) + cover note. */
+async function runTeaser(job: PreparedJob): Promise<void> {
+  // Teaser: only the frontal shot(s) go to the model (cheap); the record still
+  // lists every uploaded photo for the gallery.
+  const { photos, blocks } = await collectImages(job.personId, TEASER_MAX_IMAGES);
+  if (blocks.length === 0) throw new Error("No readable photos found for this person.");
+  const { payload, usage } = await callModel({
+    system: TEASER_SYSTEM_PROMPT,
+    tool: TEASER_TOOL,
+    toolName: "emit_teaser",
+    userText:
+      `Analyze ${job.person.displayName} — this is the FREE teaser. ${profileTextFor(job.person.profile)}\n\n` +
+      `Call emit_teaser: observations, the full move list with tags (exactly one move fully written out with freeReveal:true), and a short cover note (summary, strengths, expectations). Do NOT produce the routine, roadmap, or shopping list.`,
+    blocks,
+  });
+  await writeResult(job, buildRecord(job.personId, job.person.displayName, photos, payload), usage, "teaser");
 }
 
-function releaseSlot(): void {
-  const next = jobWaiters.shift();
-  if (next) next(); // hand the slot straight to the next waiter (count unchanged)
-  else activeJobs--;
+/** The PAID pass: every move fully written + the full plan, seeded by the teaser. */
+async function runFull(job: PreparedJob): Promise<void> {
+  const prev = await prisma.analysisResult.findFirst({
+    where: { personId: job.personId },
+    orderBy: { createdAt: "desc" },
+  });
+  const teaser = prev?.data as unknown as Person | undefined;
+
+  const { photos, blocks } = await collectImages(job.personId);
+  if (blocks.length === 0) throw new Error("No readable photos found for this person.");
+
+  const teaserContext = teaser
+    ? `You already showed them a quick FREE teaser generated from just their main photo — here it is. Now do the COMPLETE deep analysis using ALL of their photos: you can now see the profile, 3/4, and detail shots the teaser couldn't. KEEP every move from the teaser (same ids and titles — don't drop any the user was promised) and ADD any new moves the additional angles reveal. Refine the observations and strengths with what the extra photos show. The teaser:\n${JSON.stringify(
+        {
+          observations: teaser.observations,
+          advice: teaser.advice,
+          strengths: teaser.plan?.strengths,
+          summary: teaser.plan?.summary,
+        },
+        null,
+        2
+      )}`
+    : "No teaser was found — produce the complete record from the photos.";
+
+  const { payload, usage } = await callModel({
+    system: SYSTEM_PROMPT,
+    tool: ANALYSIS_TOOL,
+    toolName: "emit_analysis",
+    userText:
+      `Complete the deep analysis + full plan for ${job.person.displayName}. ${profileTextFor(job.person.profile)}\n\n${teaserContext}\n\n` +
+      `Call emit_analysis with the COMPLETE v2 record: every move fully written (detail, why tied to their photos, how as 2–5 steps, products matched to budget, timeline, frequency, phase, routineSlot), plus the full plan — exactly 3 phases distributing every move id, an AM/PM/weekly routine with correct layering, a deduplicated shoppingList, and 3–4 checkpoints.`,
+    blocks,
+  });
+
+  // The paid pass is authoritative — it analyzed every photo. Take it whole;
+  // only fall back to the teaser's onboarding chips if the model omitted them.
+  const record = buildRecord(job.personId, job.person.displayName, photos, payload);
+  if ((!record.builtFor || record.builtFor.length === 0) && teaser?.builtFor?.length) {
+    record.builtFor = teaser.builtFor;
+  }
+  await writeResult(job, record, usage, "full");
 }
 
 /**
- * The FREE scan: generate only the cheap teaser (observations, the tagged move
- * list with one move revealed, a short cover note). The expensive routine /
- * roadmap / shopping list is deferred to runFullPlanJob, which only fires on
- * purchase — so a wave of free scans doesn't burn plan budget for plans nobody
- * buys. Fire-and-forget safe.
+ * Run one already-claimed job to completion. Dispatches on jobType; any failure
+ * is captured onto the job row (never thrown) so the worker's Promise.all can't
+ * be poisoned by a single bad job.
  */
-export async function runAnalysisJob(jobId: string): Promise<void> {
-  await acquireSlot();
-  try {
-  const job = await loadJob(jobId);
+export async function processJob(jobId: string): Promise<void> {
+  const job = await prepareJob(jobId);
   if (!job) return;
   try {
-    // Teaser: only the frontal shot(s) go to the model (cheap); the record still
-    // lists every uploaded photo for the gallery.
-    const { photos, blocks } = await collectImages(job.personId, TEASER_MAX_IMAGES);
-    if (blocks.length === 0) throw new Error("No readable photos found for this person.");
-    const { payload, usage } = await callModel({
-      system: TEASER_SYSTEM_PROMPT,
-      tool: TEASER_TOOL,
-      toolName: "emit_teaser",
-      userText:
-        `Analyze ${job.person.displayName} — this is the FREE teaser. ${profileTextFor(job.person.profile)}\n\n` +
-        `Call emit_teaser: observations, the full move list with tags (exactly one move fully written out with freeReveal:true), and a short cover note (summary, strengths, expectations). Do NOT produce the routine, roadmap, or shopping list.`,
-      blocks,
-    });
-    await writeResult(job, buildRecord(job.personId, job.person.displayName, photos, payload), usage, "teaser");
+    if (job.jobType === "FULL") await runFull(job as PreparedJob);
+    else await runTeaser(job as PreparedJob);
   } catch (err) {
     await markFailed(jobId, err);
-  }
-  } finally {
-    releaseSlot();
   }
 }
 
 /**
- * The PAID pass: fill in every move's detail/why/how/products and build the full
- * plan (phases, routine, shopping list, checkpoints). Seeded with the teaser
- * that already exists so the moves and cover the user saw stay consistent. Runs
- * only when someone unlocks (see /api/person/[id]/full). Fire-and-forget safe.
+ * Inline processing for dev / transition: atomically claim the just-enqueued job
+ * (WHERE status=QUEUED, so if a real worker grabbed it first this is a no-op)
+ * then process it. Fire-and-forget safe.
  */
-export async function runFullPlanJob(jobId: string): Promise<void> {
-  await acquireSlot();
-  try {
-  const job = await loadJob(jobId);
-  if (!job) return;
-  try {
-    const prev = await prisma.analysisResult.findFirst({
-      where: { personId: job.personId },
-      orderBy: { createdAt: "desc" },
-    });
-    const teaser = prev?.data as unknown as Person | undefined;
-
-    const { photos, blocks } = await collectImages(job.personId);
-    if (blocks.length === 0) throw new Error("No readable photos found for this person.");
-
-    const teaserContext = teaser
-      ? `You already showed them a quick FREE teaser generated from just their main photo — here it is. Now do the COMPLETE deep analysis using ALL of their photos: you can now see the profile, 3/4, and detail shots the teaser couldn't. KEEP every move from the teaser (same ids and titles — don't drop any the user was promised) and ADD any new moves the additional angles reveal. Refine the observations and strengths with what the extra photos show. The teaser:\n${JSON.stringify(
-          {
-            observations: teaser.observations,
-            advice: teaser.advice,
-            strengths: teaser.plan?.strengths,
-            summary: teaser.plan?.summary,
-          },
-          null,
-          2
-        )}`
-      : "No teaser was found — produce the complete record from the photos.";
-
-    const { payload, usage } = await callModel({
-      system: SYSTEM_PROMPT,
-      tool: ANALYSIS_TOOL,
-      toolName: "emit_analysis",
-      userText:
-        `Complete the deep analysis + full plan for ${job.person.displayName}. ${profileTextFor(job.person.profile)}\n\n${teaserContext}\n\n` +
-        `Call emit_analysis with the COMPLETE v2 record: every move fully written (detail, why tied to their photos, how as 2–5 steps, products matched to budget, timeline, frequency, phase, routineSlot), plus the full plan — exactly 3 phases distributing every move id, an AM/PM/weekly routine with correct layering, a deduplicated shoppingList, and 3–4 checkpoints.`,
-      blocks,
-    });
-
-    // The paid pass is authoritative — it analyzed every photo. Take it whole;
-    // only fall back to the teaser's onboarding chips if the model omitted them.
-    const record = buildRecord(job.personId, job.person.displayName, photos, payload);
-    if ((!record.builtFor || record.builtFor.length === 0) && teaser?.builtFor?.length) {
-      record.builtFor = teaser.builtFor;
-    }
-    await writeResult(job, record, usage, "full");
-  } catch (err) {
-    await markFailed(jobId, err);
-  }
-  } finally {
-    releaseSlot();
-  }
+async function processInline(jobId: string): Promise<void> {
+  const claimed = await prisma.analysisJob.updateMany({
+    where: { id: jobId, status: "QUEUED" },
+    data: {
+      status: "RUNNING",
+      startedAt: new Date(),
+      leaseUntil: new Date(Date.now() + JOB_LEASE_MS),
+      attempts: { increment: 1 },
+    },
+  });
+  if (claimed.count === 0) return; // a worker already claimed it
+  await processJob(jobId);
 }
 
-/** Queue + start the free teaser scan (fire-and-forget). */
+/** Enqueue the free teaser scan. The worker (or inline dev) processes it. */
 export async function startAnalysis(userId: string, personId: string): Promise<string> {
   const job = await prisma.analysisJob.create({
-    data: { userId, personId, status: "QUEUED" },
+    data: { userId, personId, status: "QUEUED", jobType: "TEASER" },
   });
-  void runAnalysisJob(job.id);
+  if (INLINE_WORKER) void processInline(job.id);
   return job.id;
 }
 
-/** Queue + start the paid full-plan generation (fire-and-forget). */
+/** Enqueue the paid full-plan generation. The worker (or inline dev) processes it. */
 export async function startFullPlan(userId: string, personId: string): Promise<string> {
   const job = await prisma.analysisJob.create({
-    data: { userId, personId, status: "QUEUED" },
+    data: { userId, personId, status: "QUEUED", jobType: "FULL" },
   });
-  void runFullPlanJob(job.id);
+  if (INLINE_WORKER) void processInline(job.id);
   return job.id;
 }

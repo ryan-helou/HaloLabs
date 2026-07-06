@@ -6,8 +6,7 @@ export const metadata: Metadata = {
 };
 
 // The free-scan entry: no signup, no questionnaire — establish a guest session
-// and go straight to guided photos. (The old commit-first funnel lives in
-// components/StartFunnel.tsx, now unused.)
+// and go straight to guided photos.
 export default function StartPage() {
   return <FreeScanStart />;
 }

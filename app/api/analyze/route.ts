@@ -7,6 +7,7 @@ import { loadResults } from "@/lib/data";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { startAnalysis } from "@/lib/analyze";
+import { queuePosition } from "@/lib/queue";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,10 +25,6 @@ export const runtime = "nodejs";
 const STATUS = ".analysis.json";
 const EXIT = ".analysis.exit";
 const LOG = ".analysis.log";
-
-// A cloud job in flight longer than this is treated as dead (the worker times
-// out at 4 min; give it headroom for retries) and reaped on the next start.
-const STALE_JOB_MS = 10 * 60 * 1000;
 
 // Per-user cap on analyses started per hour. Each hosted scan spends real API
 // budget (STRATEGY flags zero-intent/abuse traffic as a bigger risk than tokens
@@ -89,23 +86,25 @@ export async function POST(req: Request) {
           data: { ageConfirmed18Plus: true },
         });
       }
-      // Don't double-start if a job is already in flight — but a job that has
-      // been in flight longer than the worker's own timeout is dead (crash,
-      // redeploy mid-run). Reap it so it can't wedge the person forever.
+      // Don't double-start if a job is already in flight. A QUEUED job is simply
+      // in line (a spike can hold it a while) — never reap it. A RUNNING job with
+      // a valid lease is genuinely processing. Only a RUNNING job whose lease has
+      // expired is a dead worker (crash / redeploy) — fail it so a fresh start
+      // isn't blocked (the recovery sweep would requeue it too).
       const live = await prisma.analysisJob.findFirst({
         where: { personId: id, status: { in: ["QUEUED", "RUNNING"] } },
         orderBy: { createdAt: "desc" },
       });
       if (live) {
-        const staleMs = Date.now() - live.createdAt.getTime();
-        if (staleMs < STALE_JOB_MS) {
+        const leaseValid = live.leaseUntil ? live.leaseUntil.getTime() > Date.now() : false;
+        if (live.status === "QUEUED" || leaseValid) {
           return NextResponse.json({ started: false, alreadyRunning: true });
         }
         await prisma.analysisJob.update({
           where: { id: live.id },
           data: {
             status: "FAILED",
-            error: "Timed out — the analysis worker didn't finish.",
+            error: "The analysis worker didn't finish — restarted.",
             completedAt: new Date(),
           },
         });
@@ -211,11 +210,17 @@ export async function GET(req: Request) {
       if (job.status === "FAILED") {
         return NextResponse.json({ state: "error", hint: job.error ?? "Analysis failed." });
       }
+      // QUEUED or RUNNING → still working. A queued job reports its place in line
+      // (honest under a spike); we NEVER false-error a job that hasn't had its
+      // turn — terminal failure only ever comes from the worker (status FAILED).
       const elapsedMs = Date.now() - job.createdAt.getTime();
-      if (elapsedMs > STALE_JOB_MS) {
+      if (job.status === "QUEUED") {
+        const position = await queuePosition(job.createdAt);
         return NextResponse.json({
-          state: "error",
-          hint: "The analysis didn't finish in time. Start it again from the photos step.",
+          state: "running",
+          queued: position > 1,
+          queuePosition: position,
+          elapsedSec: Math.round(elapsedMs / 1000),
         });
       }
       return NextResponse.json({ state: "running", elapsedSec: Math.round(elapsedMs / 1000) });

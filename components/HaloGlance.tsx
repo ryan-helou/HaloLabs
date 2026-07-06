@@ -4,6 +4,7 @@ import type { Person } from "@/lib/types";
 import { flattenAdvice } from "@/lib/plan";
 import { startingMoves } from "@/lib/glance";
 import { useProgress } from "./ProgressProvider";
+import ShareButton from "./ShareButton";
 
 /**
  * The Overview tab — the calm landing. It orients without repeating the
@@ -39,6 +40,16 @@ export default function HaloGlance({
             Your plan, in short
           </p>
           <p className="mt-3 text-[16.5px] leading-relaxed text-ink">{plan.summary}</p>
+        </div>
+      )}
+
+      {/* Share — a PII-safe card (counts + composition, never a score or photo). */}
+      {total > 0 && (
+        <div className="mt-6 flex items-center gap-3">
+          <ShareButton personId={person.id} kind="plan" />
+          <span className="text-xs text-ink-soft">
+            Shares a scores-free summary card — no photos, no personal details.
+          </span>
         </div>
       )}
 

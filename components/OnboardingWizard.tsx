@@ -265,7 +265,8 @@ export default function OnboardingWizard() {
               <ul className="mt-4 space-y-2 text-sm text-ink-soft">
                 <li className="flex gap-3">
                   <span className="font-mono text-xs text-pine">[1]</span>
-                  Your photos never leave this machine — analysis runs locally.
+                  Your photos are used only to build your plan — never to train
+                  models — and are deleted when you delete your account.
                 </li>
                 <li className="flex gap-3">
                   <span className="font-mono text-xs text-pine">[2]</span>

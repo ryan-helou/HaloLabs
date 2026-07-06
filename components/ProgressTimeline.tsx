@@ -6,6 +6,7 @@ import type { Checkin } from "@/lib/checkins";
 import { photoUrl } from "@/lib/photo";
 import { normalizeForUpload } from "@/lib/heic";
 import CompareSlider from "./CompareSlider";
+import ShareButton from "./ShareButton";
 import { useToast } from "./Toast";
 
 /**
@@ -114,7 +115,7 @@ export default function ProgressTimeline({
               are invisible day to day — they show up in the comparison.
             </p>
           </div>
-          <div className="text-right">
+          <div className="flex flex-col items-end gap-3 text-right">
             {due ? (
               <p className="rounded-full border border-pine/30 bg-sage/50 px-4 py-2 text-sm font-medium text-pine">
                 Time for your 2-week check-in
@@ -123,6 +124,9 @@ export default function ProgressTimeline({
               <p className="font-mono text-[11px] uppercase tracking-label text-ink-soft">
                 Next check-in in {nextIn} day{nextIn === 1 ? "" : "s"}
               </p>
+            )}
+            {checkins.length > 0 && (
+              <ShareButton personId={personId} kind="progress" label="Share progress" />
             )}
           </div>
         </div>

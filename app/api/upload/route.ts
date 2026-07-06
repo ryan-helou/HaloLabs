@@ -12,7 +12,7 @@ import {
 } from "@/lib/paths";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { putPhoto, photoKey, storageConfigured } from "@/lib/storage";
+import { putPhoto, photoKey } from "@/lib/storage";
 import { heicToJpeg } from "@/lib/heic-server";
 
 export const dynamic = "force-dynamic";
@@ -52,9 +52,9 @@ async function uniquePath(dir: string, name: string): Promise<string> {
 
 /**
  * Accepts multipart uploads for a person: images (jpg/png/webp, plus
- * HEIC/HEIF converted to jpg via macOS `sips`) and optional videos
- * (mp4/mov/webm). Files land in data/people/<id>/ — they never leave this
- * machine.
+ * HEIC/HEIF converted to jpg) and optional videos (mp4/mov/webm). In the cloud
+ * they're stored in Cloudflare R2 (private, served only to the owner); on-disk
+ * fallback (data/people/<id>/) is dev-only.
  */
 export async function POST(req: Request) {
   let form: FormData;
@@ -165,8 +165,6 @@ export async function POST(req: Request) {
 async function cloudUpload(personId: string, files: File[]) {
   const saved: string[] = [];
   const errors: string[] = [];
-  const cloud = storageConfigured();
-  const dir = resolvePersonDir(personId);
 
   for (const file of files) {
     const ext = path.extname(file.name).toLowerCase();
@@ -206,27 +204,20 @@ async function cloudUpload(personId: string, files: File[]) {
     }
 
     try {
-      if (cloud) {
-        const key = photoKey(personId, `${Date.now()}-${name}`);
-        await putPhoto(key, buffer, contentType);
-        await prisma.photo.create({
-          data: {
-            personId,
-            r2Key: key,
-            originalName: file.name.slice(0, 200),
-            contentType,
-            sizeBytes: buffer.byteLength,
-          },
-        });
-        saved.push(name);
-      } else if (dir) {
-        await fs.mkdir(dir, { recursive: true });
-        const target = await uniquePath(dir, name);
-        await fs.writeFile(target, buffer);
-        saved.push(path.basename(target));
-      } else {
-        errors.push(`${file.name}: no storage available`);
-      }
+      // Store bytes (R2 or Postgres, per lib/storage) + a Photo row so the
+      // worker can find them. Same key scheme regardless of backend.
+      const key = photoKey(personId, `${Date.now()}-${name}`);
+      await putPhoto(key, buffer, contentType);
+      await prisma.photo.create({
+        data: {
+          personId,
+          r2Key: key,
+          originalName: file.name.slice(0, 200),
+          contentType,
+          sizeBytes: buffer.byteLength,
+        },
+      });
+      saved.push(name);
     } catch {
       errors.push(`${file.name}: upload failed`);
     }

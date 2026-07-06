@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import { ToastProvider } from "@/components/Toast";
 import Analytics from "@/components/Analytics";
+import AttributionCapture from "@/components/AttributionCapture";
 import { appUrl } from "@/lib/env";
 
 const body = Manrope({
@@ -71,6 +72,7 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body className="min-h-screen font-sans">
         <Analytics />
+        <AttributionCapture />
         <ToastProvider>
           <a
             href="#main"
@@ -87,16 +89,16 @@ export default function RootLayout({
                 HaloLabs /
               </p>
               <p className="mt-4 max-w-md text-xs leading-relaxed text-ink-soft">
-                Every observation and suggestion is written in Claude Code by
-                the <span className="font-mono text-ink">analyze-faces</span>{" "}
-                skill — this viewer only reads the file. Tags describe each
+                Every observation and suggestion is written by Claude from your
+                own photos, in a consistent structured format. Tags describe each
                 suggestion, never the person.
               </p>
               <p className="mt-3 max-w-md text-xs leading-relaxed text-ink-soft">
-                18+ only. No scores, no rankings, no surgery — and your photos
-                never leave this machine. Nothing here is medical advice; if
-                appearance worries are weighing on you, talking to someone you
-                trust beats any plan.
+                18+ only. No scores, no rankings, no surgery. Your photos are
+                used only to build your plan — never to train models — and are
+                deleted when you delete your account. Nothing here is medical
+                advice; if appearance worries are weighing on you, talking to
+                someone you trust beats any plan.
               </p>
             </div>
             <nav className="grid grid-cols-2 gap-8">

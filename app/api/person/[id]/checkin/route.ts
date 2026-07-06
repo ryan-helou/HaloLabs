@@ -1,12 +1,11 @@
-import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isUnlocked } from "@/lib/entitlement";
-import { putPhoto, storageConfigured } from "@/lib/storage";
+import { putPhoto } from "@/lib/storage";
 import { checkinKey } from "@/lib/checkins";
-import { IMAGE_EXTS, contentTypeFor, resolvePersonDir } from "@/lib/paths";
+import { IMAGE_EXTS, contentTypeFor } from "@/lib/paths";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,8 +58,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const ts = Date.now();
-  const cloud = storageConfigured();
-  const dir = resolvePersonDir(id);
   const saved: string[] = [];
   const errors: string[] = [];
 
@@ -78,27 +75,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const buffer = Buffer.from(await file.arrayBuffer());
     const name = `${String(i + 1).padStart(2, "0")}-${safeName(file.name)}`;
     try {
-      if (cloud) {
-        const key = checkinKey(id, ts, name);
-        await putPhoto(key, buffer, contentTypeFor(ext));
-        await prisma.photo.create({
-          data: {
-            personId: id,
-            r2Key: key,
-            originalName: file.name.slice(0, 200),
-            contentType: contentTypeFor(ext),
-            sizeBytes: buffer.byteLength,
-          },
-        });
-        saved.push(name);
-      } else if (dir) {
-        const target = path.join(dir, "progress", String(ts));
-        await fs.mkdir(target, { recursive: true });
-        await fs.writeFile(path.join(target, name), buffer);
-        saved.push(name);
-      } else {
-        errors.push(`${file.name}: no storage available`);
-      }
+      // Store bytes (R2 or Postgres) under the progress prefix + a Photo row.
+      const key = checkinKey(id, ts, name);
+      await putPhoto(key, buffer, contentTypeFor(ext));
+      await prisma.photo.create({
+        data: {
+          personId: id,
+          r2Key: key,
+          originalName: file.name.slice(0, 200),
+          contentType: contentTypeFor(ext),
+          sizeBytes: buffer.byteLength,
+        },
+      });
+      saved.push(name);
     } catch {
       errors.push(`${file.name}: upload failed`);
     }
