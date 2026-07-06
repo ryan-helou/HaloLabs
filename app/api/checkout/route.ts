@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { STRIPE, stripeConfigured, appUrl } from "@/lib/env";
+import { flattenAttribution } from "@/lib/attribution";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,14 +68,9 @@ export async function POST(req: Request) {
 
   // First-touch marketing attribution captured at scan time, flattened onto the
   // Stripe session + subscription so the webhook can credit the sale to the
-  // content that drove it (Stripe metadata: <=50 keys, <=500 chars each).
+  // content that drove it.
   const attr = (user.attribution ?? {}) as Record<string, unknown>;
-  const attrMeta: Record<string, string> = {};
-  for (const [k, v] of Object.entries(attr)) {
-    if (v == null) continue;
-    attrMeta[`attr_${k}`.slice(0, 40)] = String(v).slice(0, 480);
-  }
-  const meta = { userId: user.id, ...(personId ? { personId } : {}), ...attrMeta };
+  const meta = { userId: user.id, ...(personId ? { personId } : {}), ...flattenAttribution(attr) };
 
   const checkout = await stripe.checkout.sessions.create({
     mode: "subscription",

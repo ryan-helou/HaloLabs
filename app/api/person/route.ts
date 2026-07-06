@@ -3,6 +3,7 @@ import path from "node:path";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { ATTR_COOKIE, parseAttributionCookie } from "@/lib/attribution";
 import { resolvePersonDir, slugifyPersonId } from "@/lib/paths";
 import type {
   AvoidOption,
@@ -55,15 +56,12 @@ export async function POST(req: Request) {
     // guest User (only if not already set), so it rides the same row through to
     // the purchase webhook. Best-effort — never block the scan over it.
     try {
-      const raw = (await cookies()).get("hl_attr")?.value;
-      if (raw) {
-        const attr = JSON.parse(decodeURIComponent(raw));
-        if (attr && typeof attr === "object") {
-          await prisma.user.updateMany({
-            where: { id: session.user.id, attribution: { equals: Prisma.DbNull } },
-            data: { attribution: attr },
-          });
-        }
+      const attr = parseAttributionCookie((await cookies()).get(ATTR_COOKIE)?.value);
+      if (Object.keys(attr).length > 0) {
+        await prisma.user.updateMany({
+          where: { id: session.user.id, attribution: { equals: Prisma.DbNull } },
+          data: { attribution: attr },
+        });
       }
     } catch {
       /* malformed/absent cookie — fine */

@@ -1,5 +1,4 @@
 import { prisma } from "./db";
-import { JOB_LEASE_MS } from "./analyze";
 
 /**
  * DB-backed job queue helpers. The AnalysisJob table *is* the queue: the worker
@@ -10,6 +9,12 @@ import { JOB_LEASE_MS } from "./analyze";
  * Column names below are the quoted camelCase Prisma emits, so the raw SQL
  * matches the generated schema exactly.
  */
+
+// How long a claimed job's lease lasts before the recovery sweep assumes the
+// worker died and requeues it. Comfortably longer than the model
+// timeout (4 min) + retries. Lives here (not analyze) so analyze can import
+// recovery helpers without a circular dependency.
+export const JOB_LEASE_MS = 12 * 60 * 1000;
 
 const LEASE_SECONDS = Math.round(JOB_LEASE_MS / 1000);
 const MAX_ATTEMPTS = 3;
