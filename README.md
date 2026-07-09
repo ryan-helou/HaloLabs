@@ -1,85 +1,19 @@
 # HaloLabs
 
-A **local-only, single-user** facial-analysis and glow-up-plan tool. Three
-parts share one data folder:
+*Upload a few photos of your face and get back neutral observations plus a personalized grooming plan — never an attractiveness score.*
 
-1. **The web app** (Next.js App Router + TypeScript + Tailwind) — landing,
-   onboarding wizard, guided photo intake, and the plan viewer. It also hosts
-   small local API routes for uploads, progress check-offs, and kicking off
-   analysis runs. It makes **no external API calls**; photos never leave the
-   machine.
-2. **`analyze-faces`** — a Claude Code skill
-   ([.claude/skills/analyze-faces/SKILL.md](.claude/skills/analyze-faces/SKILL.md)).
-   It views a person's photos with Claude's own vision, reads their onboarding
-   answers, and writes a full **v2 record** — observations, advice, and a
-   personalized plan — to `data/results.json`.
-3. **The data folder** (`data/`) — photos, onboarding profiles, results, and
-   progress. It is the entire "database".
+HaloLabs is a face-analysis web app that positions itself against the "rate my face" genre. You take a free scan, and Claude looks at your photos and writes what it actually sees — face shape, hair, skin, brows, facial hair, posture — then hands you a plan you can act on: a list of suggestions across hair, skin, style, and fitness, each tied to something visible in *your* photos, with an AM/PM/weekly routine, a three-phase roadmap, a shopping list, and check-offs you tick as you go. The product constitution (`docs/STRATEGY.md`) draws a hard line: no 1–10, no percentile, no ranking of people, no surgery or filler advice, 18+ only. `impact`/`effort`/`cost` always tag the suggestion, never the person.
 
-The product philosophy (what we build, what we never build) lives in
-[docs/STRATEGY.md](docs/STRATEGY.md). The short version: **plans, not scores.**
-No attractiveness ratings, no rankings, no surgery advice, 18+ only, and
-`impact`/`effort`/`cost` always describe the *suggestion*, never the person.
+The entry point is deliberately frictionless. "Get my free scan" creates a silent guest session — no signup, no password, no questionnaire — and drops you into a guided six-shot capture flow with a webcam mode (a MediaPipe face-guide ellipse and a 3-second timer), a native camera path on phones, and plain drag-drop; HEIC converts to JPEG on upload and short clips are accepted. The 18+ confirmation is collected right before the run.
 
-## The flow
+## How the analysis works
 
-```
-/            landing (marketing)
-/start       onboarding wizard → 18+ gate, goals, focus areas, time,
-             budget, no-gos, history → writes data/people/<id>/profile.json
-/start/photos?id=<id>
-             guided capture: 6 recommended shots + lighting tips, drag-drop
-             upload (HEIC auto-converts via sips; short videos accepted),
-             then "Begin my analysis" → spawns a local headless Claude Code
-             run of analyze-faces and polls until the plan is ready
-/person/<id> the deliverable: plan overview (summary, strengths,
-             expectations) → observations → analysis matrix → protocol →
-             AM/PM/weekly routine → 3-phase roadmap with check-offs →
-             shopping list → checkpoints
-/profiles    all analyzed people
-```
+Analysis is one forced tool call to the Claude API (Anthropic SDK, default model `claude-sonnet-5`) that emits a structured v2 record — the same shape the viewer renders. It runs in two passes to keep costs sane under a viral wave of free scans. The **teaser** is cheap: it sends only the frontal shot or two, and returns observations plus the full move *list* as tags with exactly one suggestion (`freeReveal`) written out in full — the free sample. The **full** pass runs only after payment: it sends all photos (up to eight), keeps every move the teaser promised, and fills in the routine, roadmap, and shopping list. Photos are downscaled to 1568px on the longest edge before they hit the vision API, the no-tiling sweet spot that keeps each image near ~1600 tokens instead of ~4800. Every job records its input/output tokens and an estimated cost in cents.
 
-The **Begin my analysis** button shells out to the `claude` CLI
-(`/api/analyze`); if that's unavailable it shows the manual fallback — open
-Claude Code and say `run analyze-faces --force <id>`.
+Jobs are rows in Postgres drained by a separate worker service that claims them atomically (`FOR UPDATE SKIP LOCKED`), with lease-based crash recovery so a redeploy can't strand an in-flight scan. In local dev the web process runs jobs inline instead. There's also an on-machine path that shells out to the `claude` CLI and runs the same logic as a Claude Code skill (`.claude/skills/analyze-faces/SKILL.md`).
 
-## Directory layout
+## Billing
 
-```
-data/
-  people/
-    <person-id>/            # one folder per person
-      profile.json          # onboarding answers (written by /start)
-      photo1.jpg …          # uploaded photos (jpg/png/webp; HEIC converted)
-      clip.mp4              # optional videos
-      refs/                 # optional reference images for suggestions
-      .analysis.{json,log,exit}  # local analysis-run status (transient)
-  results.json              # all analysis output (source of truth)
-  progress.json             # suggestion check-offs from the roadmap
-```
+The plan comes back blurred behind a paywall. Unlocking it is a $9.99/month Stripe subscription: Checkout completes, the webhook flips `subscriptionStatus` to `active` — the single flag the paywall reads — and it also *durably* enqueues the paid full-plan job, so you still get what you paid for even if you close the tab. Cancel and it re-locks automatically. A 100%-off friends code checks out at $0 with no card. Purchases are recorded server-side with first-touch marketing attribution so a sale can be credited to the content that drove it.
 
-## Run
-
-```bash
-npm install
-npm run dev      # http://localhost:3000
-```
-
-The viewer re-reads `data/*.json` on every request — re-running the skill
-shows up on reload.
-
-## Data contract
-
-Types live in [lib/types.ts](lib/types.ts) — the single source of truth for
-`results.json` (v2: suggestions carry `id`, `why`, `how`, `products`,
-`timeline`, `frequency`, `evidence`, `phase`, `routineSlot`; people carry
-`plan` and `builtFor`), `profile.json` (`OnboardingProfile`), and
-`progress.json` (`ProgressStore`). v1 records still render — every v2 field
-is optional in the viewer.
-
-## Notes / non-goals
-
-- No auth, no database, no cloud. Photos are served via a path-safe route
-  handler ([app/api/photo/[...path]/route.ts](app/api/photo/%5B...path%5D/route.ts)).
-- No face scoring or ranking UI — by design, permanently. See
-  [docs/STRATEGY.md](docs/STRATEGY.md) §3 before adding features.
+Built with Next.js (App Router) and TypeScript, Tailwind, Prisma over Postgres, Auth.js for guest and credentials sign-in, Cloudflare R2 for photo storage (with a Postgres-blob fallback the worker can reach), and Stripe. Photos are private, served only to their owner; a plan can be shared through an opaque token that maps to a PII-stripped projection, never the full record.
