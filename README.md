@@ -1,6 +1,12 @@
+<div align="center">
+
 # HaloLabs
 
-A website where you upload photos of your face and get neutral observations and a personal grooming plan, never a rating of how you look.
+**A website where you upload photos of your face and get neutral observations and a personal grooming plan, never a rating of how you look.**
+
+</div>
+
+<br>
 
 Many "rate my face" apps give people a score out of 10. HaloLabs deliberately does not. Instead, AI (a computer program that can look at photos) describes what it sees, such as face shape, hair, skin and posture, and suggests practical changes in hair, skincare, style and fitness, each tied to something visible in your own photos. It is for adults (18+) only and does not give advice about surgery or fillers.
 
