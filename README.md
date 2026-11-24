@@ -4,7 +4,7 @@
 
 **A website where you upload photos of your face and get neutral observations and a personal grooming plan, never a rating of how you look.**
 
-<!-- facts --><img alt="Photo guide: 6 angles" src="https://img.shields.io/badge/Photo_guide-6_angles-24292f?style=for-the-badge"> <img alt="Advice in: 4 areas" src="https://img.shields.io/badge/Advice_in-4_areas-24292f?style=for-the-badge">
+<!-- facts --><img alt="Photo guide: 6 angles" src="https://img.shields.io/badge/Photo_guide-6_angles-24292f?style=for-the-badge"> <img alt="Advice in: 4 areas" src="https://img.shields.io/badge/Advice_in-4_areas-24292f?style=for-the-badge"> <img alt="Ratings: never, by design" src="https://img.shields.io/badge/Ratings-never,_by_design-24292f?style=for-the-badge">
 
 </div>
 
